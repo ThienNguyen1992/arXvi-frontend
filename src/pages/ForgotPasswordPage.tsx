@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { login } from "@/lib/api"
+import { forgotPassword } from "@/lib/api"
 
 function DailyLogo() {
   return (
@@ -15,12 +15,10 @@ function DailyLogo() {
   )
 }
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
   const [emailError, setEmailError] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -36,44 +34,21 @@ export default function LoginPage() {
     return null;
   };
 
-  const validatePassword = (value: string) => {
-    if (!value) {
-      return "Password is required";
-    }
-    return null;
-  };
-
   async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
     const emailValidation = validateEmail(email);
-    const passwordValidation = validatePassword(password);
-
-
     setEmailError(emailValidation);
-    setPasswordError(passwordValidation);
-    
-    if (emailValidation || passwordValidation) {
-      return; // Prevent submission if there are validation errors
+
+    if (emailValidation) {
+      return; 
     }
 
+    e.preventDefault()
     setError(null)
     setLoading(true)
 
     try {
-      const data = await login(email.trim(), password);
-      
-      if (data?.access_token) {
-        localStorage.setItem("access_token", data.access_token);
-      }
-      if (data?.refresh_token) {
-        localStorage.setItem("refresh_token", data.refresh_token);
-      }
-      
-      if (data?.user?.isFirstLogged) {
-        navigate("/tour");
-      } else {
-        navigate("/");
-      }
+      await forgotPassword(email.trim());
+      navigate("/reset-password");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
     } finally {
@@ -93,9 +68,9 @@ export default function LoginPage() {
 
         <div className="w-full rounded-2xl border border-pepper-40 bg-pepper-70/80 p-8 shadow-[0_8px_32px_color-mix(in_srgb,var(--color-pepper-90)_60%,transparent)] backdrop-blur-sm">
           <div className="mb-8 text-center">
-            <h1 className="text-xl font-bold text-foreground">Welcome back</h1>
+            <h1 className="text-xl font-bold text-foreground">Forgot Password</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Log in to continue to your feed
+              Enter your email to reset your password
             </p>
           </div>
 
@@ -121,63 +96,32 @@ export default function LoginPage() {
               {emailError && <p className="text-red-500 text-sm mt-1">{emailError}</p>}
             </div>
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="password" className="text-muted-foreground">
-                Password
-              </Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setPasswordError(validatePassword(e.target.value));
-                }}
-                required
-                className="h-11 rounded-xl border-pepper-40 bg-pepper-80/50 px-4 text-foreground placeholder:text-pepper-10/60 focus-visible:border-cabbage-50 focus-visible:ring-cabbage-50/30"
-              />
-              {passwordError && <p className="text-red-500 text-sm mt-1">{passwordError}</p>}
-              
-              {error && (
-                <p className="rounded-lg bg-ketchup-60/15 px-3 py-2 text-sm text-ketchup-30 mt-1">
-                  {error}
-                </p>
-              )}
-            </div>
+            {error && (
+              <p className="rounded-lg bg-ketchup-60/15 px-3 py-2 text-sm text-ketchup-30">
+                {error}
+              </p>
+            )}
 
             <Button
               type="submit"
-              disabled={!email || !password || emailError !== null || passwordError !== null}
+              disabled={!email || emailError !== null}
               loading={loading}
               className="mt-1 h-11 w-full rounded-xl bg-primary text-base font-bold hover:bg-cabbage-50 disabled:opacity-60"
             >
-              Log in
+              Continue
             </Button>
-            
-            <div className="flex justify-center mt-2">
-              <Link to="/forgot-password" className="text-sm font-medium text-water-30 hover:text-water-20 transition-colors">
-                Forgot password?
-              </Link>
-            </div>
           </form>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            Don&apos;t have an account?{" "}
+            Remembered your password?{" "}
             <Link
-              to="/signup"
+              to="/login"
               className="font-medium text-water-30 transition-colors hover:text-water-20"
             >
-              Sign up
+              Back to login
             </Link>
           </p>
         </div>
-
-        <p className="text-center text-xs text-pepper-10/70">
-          Where developers grow together
-        </p>
       </div>
     </div>
   )

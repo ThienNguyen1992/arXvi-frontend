@@ -231,46 +231,51 @@
 
 /* Dark mode — mapped from daily.dev dark semantic tokens */
 .dark {
-  --background: #0e1217;
-  --foreground: #ffffff;
-  --card: #1c1f26;
-  --card-foreground: #ffffff;
-  --popover: #1c1f26;
-  --popover-foreground: #ffffff;
-  --primary: #ce3df3;
-  --primary-foreground: #ffffff;
-  --secondary: #22262d;
-  --secondary-foreground: #ffffff;
-  --muted: #22262d;
-  --muted-foreground: #a8b3cf;
-  --accent: #d74cf6;
-  --accent-foreground: #ffffff;
-  --destructive: #e04337;
-  --destructive-foreground: #ffffff;
-  --border: #383c47;
-  --input: #383c47;
-  --ring: #ce3df3;
-  --chart-1: #ce3df3;
-  --chart-2: #39e58c;
-  --chart-3: #427ef7;
-  --chart-4: #ff8e3b;
-  --chart-5: #fc538d;
-  --sidebar: #17191f;
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: #ce3df3;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #22262d;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #383c47;
-  --sidebar-ring: #ce3df3;
+  /* Full Color Green Tone Palette */
+  --background: #121212;
+  --foreground: #E2E8F0;
+  --card: #1E1E1E;
+  --card-foreground: #E2E8F0;
+  --popover: #1E1E1E;
+  --popover-foreground: #E2E8F0;
+  --primary: #A7F3D0;
+  --primary-foreground: #121212;
+  --secondary: #03DA7A;
+  --secondary-foreground: #121212;
+  --muted: #1E1E1E;
+  --muted-foreground: #94A3B8;
+  --accent: #1E1E1E;
+  --accent-foreground: #E2E8F0;
+  --destructive: #CF6679;
+  --destructive-foreground: #FFFFFF;
+  --border: #333333;
+  --input: #333333;
+  --ring: #A7F3D0;
 
-  --daily-brand: #ce3df3;
-  --daily-brand-hover: #d74cf6;
-  --daily-link: #508cf9;
-  --daily-success: #39e58c;
+  /* daily.dev semantic aliases mapped to Green Tone */
+  --daily-brand: #A7F3D0;
+  --daily-brand-hover: #6EE7B7;
+  --daily-link: #03DA7A;
+  --daily-success: #34D399;
   --daily-warning: #ff8e3b;
-  --daily-error: #e04337;
-  --daily-info: #427ef7;
+  --daily-error: #CF6679;
+  --daily-info: #03DA7A;
+
+  /* Override hardcoded raw palette for dark mode to match Green Tone */
+  --color-pepper-90: #121212; /* Background */
+  --color-pepper-80: #1E1E1E; /* Input bg */
+  --color-pepper-70: #1E1E1E; /* Surface / Card */
+  --color-pepper-40: #333333; /* Borders */
+  --color-pepper-10: #94A3B8; /* Placeholder / Text Secondary */
+  --color-pepper-30: #444444; /* Hover borders */
+
+  --color-cabbage-50: #A7F3D0; /* Primary hover/focus */
+  
+  --color-water-30: #03DA7A; /* Links (Secondary) */
+  --color-water-20: #02B665; /* Link hover */
+  
+  --color-ketchup-60: #CF6679; /* Error bg base */
+  --color-ketchup-30: #CF6679; /* Error text */
 }
 
 @layer base {
