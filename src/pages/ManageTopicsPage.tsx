@@ -1,0 +1,198 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getCategories, getUserTopics, updateUserTopics } from '@/lib/api';
+import { Spinner } from '@/components/ui/spinner';
+import { ArrowLeft, Save, Tag } from 'lucide-react';
+
+const ManageTopicsPage: React.FC = () => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
+  
+  // 1. Fetch user's current topics to pre-select
+  const { data: userTopicsData, isLoading: isLoadingUser } = useQuery({
+    queryKey: ['userTopics'],
+    queryFn: getUserTopics,
+  });
+
+  // 2. Fetch all categories and nested topics
+  const { data: categoriesData, isLoading: isLoadingCats } = useQuery({
+    queryKey: ['categories'],
+    queryFn: getCategories,
+  });
+
+  // Initialize selected set
+  useEffect(() => {
+    if (!userTopicsData) return;
+    
+    const codes = new Set<string>();
+    
+    // userTopicsData might be an array of Categories (which contain topics array)
+    // or an array of Topics, or a string array. We must handle all safely.
+    let dataArray = Array.isArray(userTopicsData) ? userTopicsData : (userTopicsData.data || []);
+    
+    dataArray.forEach((item: any) => {
+      if (typeof item === 'string') {
+        codes.add(item);
+      } else if (item.topics && Array.isArray(item.topics)) {
+        // It's a category containing topics
+        item.topics.forEach((nestedTopic: any) => {
+          if (nestedTopic.code) codes.add(nestedTopic.code);
+        });
+      } else if (item.code) {
+        // It's a topic object directly
+        codes.add(item.code);
+      }
+    });
+    
+    setSelectedCodes(codes);
+  }, [userTopicsData]);
+
+  const toggleTopic = (code: string) => {
+    const next = new Set(selectedCodes);
+    if (next.has(code)) {
+      next.delete(code);
+    } else {
+      next.add(code);
+    }
+    setSelectedCodes(next);
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: (codes: string[]) => updateUserTopics(codes),
+    onSuccess: () => {
+      // Invalidate both user topics and the feed to ensure they are fresh upon returning home
+      queryClient.invalidateQueries({ queryKey: ['userTopics'] });
+      queryClient.invalidateQueries({ queryKey: ['papers', 'feed'] });
+      navigate('/home');
+    }
+  });
+
+  const handleSave = () => {
+    saveMutation.mutate(Array.from(selectedCodes));
+  };
+
+  if (isLoadingUser || isLoadingCats) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <Spinner size={48} className="text-primary" />
+      </div>
+    );
+  }
+
+  const categories = Array.isArray(categoriesData) ? categoriesData : (categoriesData?.data || []);
+
+  return (
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
+      {/* Header */}
+      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border px-6 py-4 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/home')}
+            className="p-2 hover:bg-accent rounded-full transition-colors text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="bg-primary/20 p-2 rounded-lg text-primary">
+              <Tag size={20} />
+            </div>
+            <h1 className="text-xl font-bold">Manage Your Topics</h1>
+          </div>
+        </div>
+
+        <button
+          onClick={handleSave}
+          disabled={saveMutation.isPending}
+          className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saveMutation.isPending ? (
+            <Spinner size={18} className="text-primary-foreground" />
+          ) : (
+            <Save size={18} />
+          )}
+          Save Changes
+        </button>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 p-6 md:p-10 overflow-y-auto max-w-6xl mx-auto w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="mb-8">
+          <p className="text-muted-foreground text-lg">
+            Customize your feed by selecting the topics that interest you. You have currently selected <strong className="text-foreground">{selectedCodes.size}</strong> topics.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-10">
+          {categories.map((category: any) => {
+            const nestedTopics = category.topics || [];
+            if (nestedTopics.length === 0) return null;
+
+            return (
+              <div key={category.id} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <div className="mb-6 pb-4 border-b border-border/50">
+                  <h2 className="text-2xl font-bold text-foreground">{category.title || category.name}</h2>
+                  {category.description && (
+                    <p className="text-muted-foreground mt-2">{category.description}</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {nestedTopics.map((topic: any) => {
+                    const isSelected = selectedCodes.has(topic.code);
+                    
+                    return (
+                      <div
+                        key={topic.id || topic.code}
+                        onClick={() => toggleTopic(topic.code)}
+                        className={`cursor-pointer border rounded-xl p-4 transition-all duration-200 select-none flex flex-col justify-center
+                          ${isSelected 
+                            ? 'bg-primary/10 border-primary text-primary shadow-sm shadow-primary/10 ring-1 ring-primary/20' 
+                            : 'bg-background border-border hover:border-primary/50 hover:bg-accent/50 text-foreground'
+                          }
+                        `}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h4 className="font-bold leading-tight">
+                            {topic.title || topic.name}
+                          </h4>
+                          {/* Checkbox indicator */}
+                          <div className={`shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-colors
+                            ${isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-input bg-background'}
+                          `}>
+                            {isSelected && (
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                              </svg>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-md
+                            ${isSelected ? 'bg-primary/20 text-primary' : 'bg-secondary/30 text-muted-foreground'}
+                          `}>
+                            #{topic.code}
+                          </span>
+                        </div>
+                        
+                        {topic.description && (
+                          <p className={`text-xs mt-3 line-clamp-2 ${isSelected ? 'text-primary/80' : 'text-muted-foreground'}`}>
+                            {topic.description}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default ManageTopicsPage;
