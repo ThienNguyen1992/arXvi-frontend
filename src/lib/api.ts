@@ -174,7 +174,7 @@ export async function getPapers({
     if (q) params.q = q;
     if (title) params.title = title;
     if (author) params.author = author;
-    const response = await api.get('/papers', { params });
+    const response = await api.get('/papers/es/search', { params });
     return response.data;
   } catch (error: any) {
     const message = error.response?.data?.message || error.response?.data?.error || "Failed to fetch papers";
