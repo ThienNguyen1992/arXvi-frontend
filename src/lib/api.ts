@@ -167,6 +167,8 @@ export async function getPapers({
     const params: Record<string, string> = {
       page: String(page),
       limit: String(limit),
+      sort_by: 'published_at',
+      order: 'desc',
     };
     if (topicCodes && topicCodes.length > 0) {
       params.topics = topicCodes.join(',');
@@ -184,7 +186,7 @@ export async function getPapers({
 
 export async function getPaperById(id: string) {
   try {
-    const response = await api.get(`/papers/${id}`);
+    const response = await api.get(`/papers/es/${id}`);
     return response.data;
   } catch (error: any) {
     const message = error.response?.data?.message || error.response?.data?.error || "Failed to fetch paper details";
@@ -227,6 +229,103 @@ export async function getHistoryPapers({
     throw new Error(message);
   }
 }
+
+export async function getDuplicatePapers({
+  parentId,
+  page = 1,
+  limit = 20,
+}: {
+  parentId?: string;
+  page?: number;
+  limit?: number;
+}) {
+  try {
+    const params: Record<string, string> = { page: String(page), limit: String(limit) };
+    if (parentId) params.parentId = parentId;
+    const response = await api.get('/papers/es/duplicates/list', { params });
+    return response.data;
+  } catch (error: any) {
+    const message = error.response?.data?.message || error.response?.data?.error || "Failed to fetch duplicate papers";
+    throw new Error(message);
+  }
+}
+
+export async function getRecommendedPapers(id: string) {
+  try {
+    const response = await api.get(`/papers/es/${id}/you-might-like`);
+    return response.data;
+  } catch (error: any) {
+    const message = error.response?.data?.message || error.response?.data?.error || "Failed to fetch recommended papers";
+    throw new Error(message);
+  }
+}
+
+// ---------------- STATISTICS / LEADERBOARD MODULE ---------------- //
+
+export async function getTopicVelocity(params?: { topics?: string, interval?: string }) {
+  try {
+    const response = await api.get('/statistics/dashboard/topic-velocity', { params });
+    return response.data;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to fetch topic velocity");
+  }
+}
+
+export async function getKeywordsCloud(params?: { days?: number }) {
+  try {
+    const response = await api.get('/statistics/dashboard/keywords-cloud', { params });
+    return response.data;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to fetch keywords cloud");
+  }
+}
+
+export async function getActivityHeatmap() {
+  try {
+    const response = await api.get('/statistics/dashboard/activity-heatmap');
+    return response.data;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to fetch activity heatmap");
+  }
+}
+
+export async function getTopicRace() {
+  try {
+    const response = await api.get('/statistics/dashboard/topic-race');
+    return response.data;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to fetch topic race");
+  }
+}
+
+export async function getTrendingPapers(params?: { timeframe?: string }) {
+  try {
+    const response = await api.get('/statistics/leaderboard/trending-papers', { params });
+    return response.data;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to fetch trending papers");
+  }
+}
+
+export async function getTopAuthors(params?: { timeframe?: string }) {
+  try {
+    const response = await api.get('/statistics/leaderboard/top-authors', { params });
+    return response.data;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to fetch top authors");
+  }
+}
+
+export async function getRisingTopics(params?: { timeframe?: string }) {
+  try {
+    const response = await api.get('/statistics/leaderboard/rising-topics', { params });
+    return response.data;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.message || "Failed to fetch rising topics");
+  }
+}
+
+// ---------------- HISTORY MODULE ---------------- //
 
 export async function addHistoryPaper(id: string) {
   try {

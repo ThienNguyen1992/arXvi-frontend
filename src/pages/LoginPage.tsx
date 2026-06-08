@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react"
+import { useState, useEffect, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,6 +17,11 @@ function DailyLogo() {
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  
+  useEffect(() => {
+    document.title = "Log in | arXvi";
+  }, []);
+
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -93,9 +98,9 @@ export default function LoginPage() {
 
         <div className="w-full rounded-2xl border border-pepper-40 bg-pepper-70/80 p-8 shadow-[0_8px_32px_color-mix(in_srgb,var(--color-pepper-90)_60%,transparent)] backdrop-blur-sm">
           <div className="mb-8 text-center">
-            <h1 className="text-xl font-bold text-foreground">Welcome back</h1>
+            <h1 className="text-xl font-bold text-foreground">Welcome back!</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Log in to continue to your feed
+              Please log in to access your account.
             </p>
           </div>
 
@@ -152,7 +157,7 @@ export default function LoginPage() {
               type="submit"
               disabled={!email || !password || emailError !== null || passwordError !== null}
               loading={loading}
-              className="mt-1 h-11 w-full rounded-xl bg-primary text-base font-bold hover:bg-cabbage-50 disabled:opacity-60"
+              className="mt-1 h-11 w-full rounded-xl bg-primary text-primary-foreground text-base font-bold hover:bg-primary/90 disabled:opacity-60"
             >
               Log in
             </Button>

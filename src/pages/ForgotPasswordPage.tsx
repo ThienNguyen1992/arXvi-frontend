@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react"
+import { useState, useEffect, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,6 +17,11 @@ function DailyLogo() {
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
+  
+  useEffect(() => {
+    document.title = "Forgot Password | arXvi";
+  }, []);
+
   const [email, setEmail] = useState("")
   const [emailError, setEmailError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null)
