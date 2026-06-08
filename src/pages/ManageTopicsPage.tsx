@@ -3,12 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCategories, getUserTopics, updateUserTopics } from '@/lib/api';
 import { Spinner } from '@/components/ui/spinner';
+import { useToast } from '@/components/ui/toast';
 import { ArrowLeft, Save, Tag } from 'lucide-react';
 
 const ManageTopicsPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
+  
+  React.useEffect(() => {
+    document.title = "Manage Topics | arXvi";
+  }, []);
   
   // 1. Fetch user's current topics to pre-select
   const { data: userTopicsData, isLoading: isLoadingUser } = useQuery({
@@ -62,11 +68,14 @@ const ManageTopicsPage: React.FC = () => {
   const saveMutation = useMutation({
     mutationFn: (codes: string[]) => updateUserTopics(codes),
     onSuccess: () => {
-      // Invalidate both user topics and the feed to ensure they are fresh upon returning home
       queryClient.invalidateQueries({ queryKey: ['userTopics'] });
       queryClient.invalidateQueries({ queryKey: ['papers', 'feed'] });
-      navigate('/home');
-    }
+      toast('Topics saved successfully!', 'success');
+      setTimeout(() => navigate('/home'), 1500);
+    },
+    onError: (error: Error) => {
+      toast(error.message || 'Failed to save topics. Please try again.', 'error');
+    },
   });
 
   const handleSave = () => {
@@ -104,7 +113,7 @@ const ManageTopicsPage: React.FC = () => {
 
         <button
           onClick={handleSave}
-          disabled={saveMutation.isPending}
+          disabled={saveMutation.isPending || selectedCodes.size < 3}
           className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saveMutation.isPending ? (
@@ -120,8 +129,17 @@ const ManageTopicsPage: React.FC = () => {
       <main className="flex-1 p-6 md:p-10 overflow-y-auto max-w-6xl mx-auto w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="mb-8">
           <p className="text-muted-foreground text-lg">
-            Customize your feed by selecting the topics that interest you. You have currently selected <strong className="text-foreground">{selectedCodes.size}</strong> topics.
+            Customize your feed by selecting the topics that interest you. You have currently selected{' '}
+            <strong className={selectedCodes.size >= 3 ? 'text-primary' : 'text-destructive'}>
+              {selectedCodes.size}
+            </strong>{' '}
+            topics.
           </p>
+          {selectedCodes.size < 3 && (
+            <p className="mt-2 text-sm text-destructive flex items-center gap-1.5">
+              <span>⚠</span> Please select at least <strong>3 topics</strong> to continue ({3 - selectedCodes.size} more needed).
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-10">

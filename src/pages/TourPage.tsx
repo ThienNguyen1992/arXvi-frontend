@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getCategories, updateUserTopics } from '@/lib/api';
 import { useCategoryStore, type Category } from '@/store/useCategoryStore';
@@ -11,6 +11,10 @@ export default function TourPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2>(1);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    document.title = "Welcome Tour | arXvi";
+  }, []);
 
   const { data: categories, isLoading, error } = useQuery<Category[]>({
     queryKey: ['categories'],
@@ -91,18 +95,18 @@ export default function TourPage() {
                   >
                     <div className="flex w-full items-center justify-between gap-3">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-semibold text-foreground text-base truncate">
+                        <span className="font-semibold text-foreground text-base">
                           {category.title}
                         </span>
-                        <span className="shrink-0 rounded-md bg-secondary/20 px-2 py-0.5 text-xs font-medium text-secondary">
+                        <span className="shrink-0 rounded-md bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
                           {category.code}
                         </span>
                       </div>
                       <div className="shrink-0">
                         {isSelected ? (
-                          <CheckCircle2 className="h-6 w-6 text-primary" />
+                          <CheckCircle2 className="h-6 w-6 text-primary no-icon-style" />
                         ) : (
-                          <Circle className="h-6 w-6 text-muted-foreground/30" />
+                          <Circle className="h-6 w-6 text-primary no-icon-style" />
                         )}
                       </div>
                     </div>
@@ -138,7 +142,13 @@ export default function TourPage() {
                   Pick your topics
                 </h1>
                 <p className="mt-2 text-lg text-muted-foreground">
-                  Select specific topics to personalize your feed.
+                  Select specific topics to personalize your feed.{' '}
+                  <span className={selectedTopicCodes.length >= 3 ? 'text-primary font-semibold' : 'text-destructive font-semibold'}>
+                    {selectedTopicCodes.length} selected
+                  </span>
+                  {selectedTopicCodes.length < 3 && (
+                    <span className="text-destructive"> — {3 - selectedTopicCodes.length} more needed</span>
+                  )}
                 </p>
               </div>
             </div>
@@ -158,7 +168,7 @@ export default function TourPage() {
                       <h2 className="text-xl font-bold text-foreground">
                         {category.title}
                       </h2>
-                      <span className="rounded-md bg-secondary/20 px-2 py-0.5 text-xs font-medium text-secondary">
+                      <span className="rounded-md bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
                         {category.code}
                       </span>
                     </div>
@@ -185,7 +195,7 @@ export default function TourPage() {
                                 </span>
                                 {/* Code badge */}
                                 <span className="mt-1 inline-flex">
-                                  <span className="rounded bg-secondary/20 px-1.5 py-0.5 text-[10px] font-medium text-secondary">
+                                  <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
                                     {topic.code}
                                   </span>
                                 </span>
@@ -198,9 +208,9 @@ export default function TourPage() {
                               </div>
                               <div className="shrink-0 mt-0.5">
                                 {isSelected ? (
-                                  <CheckCircle2 className="h-5 w-5 text-primary" />
+                                  <CheckCircle2 className="h-5 w-5 text-primary no-icon-style" />
                                 ) : (
-                                  <Circle className="h-5 w-5 text-muted-foreground/30" />
+                                  <Circle className="h-5 w-5 text-primary no-icon-style" />
                                 )}
                               </div>
                             </div>
@@ -222,11 +232,11 @@ export default function TourPage() {
             <div className="mt-10 flex justify-end border-t border-border pt-6 sticky bottom-0 bg-background/80 backdrop-blur-sm pb-6 z-10">
               <Button
                 onClick={handleSubmit}
-                disabled={selectedTopicCodes.length === 0 || mutation.isPending}
+                disabled={selectedTopicCodes.length < 3 || mutation.isPending}
                 loading={mutation.isPending}
                 className="w-full sm:w-auto text-base font-bold px-10 py-6 h-auto rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                Finish & Continue
+                Finish &amp; Continue
               </Button>
             </div>
           </>
