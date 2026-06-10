@@ -1,91 +1,185 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
+import { useState, type FormEvent } from "react"
+import { Link, useNavigate } from "react-router-dom"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { register } from "@/lib/api"
+import { toast } from "@/store/useToastStore"
 
-const SignUpPage: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [emailError, setEmailError] = useState<string | null>(null);
+function DailyLogo() {
+  return (
+    <div className="flex items-center gap-1 text-2xl font-bold tracking-tight">
+      <span className="text-foreground">daily</span>
+      <span className="text-primary">.</span>
+      <span className="text-foreground">dev</span>
+    </div>
+  )
+}
 
-  useEffect(() => {
-    document.title = "Sign Up | arXvi";
-  }, []);
+export default function SignUpPage() {
+  const navigate = useNavigate()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  const validateEmail = (email: string) => {
-    // Basic email regex for validation
-    const emailRegex = /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/;
-    if (!email) {
-      return 'Email is required';
+  const emailRegex = /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/
+
+  const validateEmail = (value: string) => {
+    if (!value.trim()) {
+      return "Email is required"
     }
-    if (!emailRegex.test(email)) {
-      return 'Please enter a valid email address';
+    if (!emailRegex.test(value)) {
+      return "Please enter a valid email address"
     }
-    return null;
-  };
+    return null
+  }
 
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newEmail = e.target.value;
-    setEmail(newEmail);
-    setEmailError(validateEmail(newEmail));
-  };
-
-  const isFormValid = email && password && !emailError;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isFormValid) {
-      // Handle sign-up logic here
-      console.log('Sign Up Data:', { email, password });
-      alert('Sign Up Successful!');
+  const validatePassword = (value: string) => {
+    if (!value) {
+      return "Password is required"
     }
-  };
+    return null
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+
+    const emailValidation = validateEmail(email)
+    const passwordValidation = validatePassword(password)
+
+    setEmailError(emailValidation)
+    setPasswordError(passwordValidation)
+
+    if (emailValidation || passwordValidation) {
+      return
+    }
+
+    setError(null)
+    setLoading(true)
+
+    try {
+      const data = await register(email.trim(), password)
+
+      if (data?.access_token) {
+        localStorage.setItem("access_token", data.access_token)
+      }
+      if (data?.refresh_token) {
+        localStorage.setItem("refresh_token", data.refresh_token)
+      }
+
+      toast.success("Registration successful!")
+
+      if (data?.access_token) {
+        if (data?.user?.isFirstLogged) {
+          navigate("/tour")
+        } else {
+          navigate("/home")
+        }
+      } else {
+        navigate("/login")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-900 text-gray-100">
-      <Card className="w-[350px] bg-gray-800 border-gray-700">
-        <CardHeader>
-          <CardTitle className="text-center text-2xl font-bold">Sign Up to Daily.dev</CardTitle>
-          <CardDescription className="text-center text-gray-400">Enter your email and password below.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit}>
-            <div className="grid w-full items-center gap-4">
-              <div className="flex flex-col space-y-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={email}
-                  onChange={handleEmailChange}
-                  className="bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500"
-                />
-                {emailError && <p className="text-red-500 text-sm mt-1">{emailError}</p>}
-              </div>
-              <div className="flex flex-col space-y-1.5">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="********"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </form>
-        </CardContent>
-        <CardFooter className="flex justify-center">
-          <Button type="submit" form="signup-form" disabled={!isFormValid} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-            Sign Up
-          </Button>
-        </CardFooter>
-      </Card>
-    </div>
-  );
-};
+    <div className="relative flex min-h-svh flex-col items-center justify-center overflow-hidden px-4 py-12">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,color-mix(in_srgb,var(--primary)_25%,transparent),transparent)]"
+      />
 
-export default SignUpPage;
+      <div className="relative z-10 flex w-full max-w-[26rem] flex-col items-center gap-8">
+        <DailyLogo />
+
+        <div className="w-full rounded-2xl border border-border bg-card p-8 shadow-[0_8px_32px_color-mix(in_srgb,var(--background)_60%,transparent)] backdrop-blur-sm">
+          <div className="mb-8 text-center">
+            <h1 className="text-xl font-bold text-foreground">Create an account</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Sign up to start exploring papers
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="email" className="text-muted-foreground">
+                Email
+              </Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  setEmailError(validateEmail(e.target.value))
+                }}
+                required
+                className="h-11 rounded-xl px-4"
+              />
+              {emailError && <p className="text-red-500 text-sm mt-1">{emailError}</p>}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="password" className="text-muted-foreground">
+                Password
+              </Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  setPasswordError(validatePassword(e.target.value))
+                }}
+                required
+                className="h-11 rounded-xl px-4"
+              />
+              {passwordError && <p className="text-red-500 text-sm mt-1">{passwordError}</p>}
+
+              {error && (
+                <p className="rounded-lg bg-ketchup-60/15 px-3 py-2 text-sm text-ketchup-30 mt-1">
+                  {error}
+                </p>
+              )}
+            </div>
+
+            <Button
+              type="submit"
+              disabled={!email || !password || emailError !== null || passwordError !== null}
+              loading={loading}
+              className="mt-1 h-11 !w-full rounded-xl text-base font-bold"
+            >
+              Sign up
+            </Button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <Link
+              to="/login"
+              className="font-medium text-primary transition-colors hover:text-primary/80"
+            >
+              Log in
+            </Link>
+          </p>
+        </div>
+
+        <p className="text-center text-xs text-muted-foreground">
+          Where developers grow together
+        </p>
+      </div>
+    </div>
+  )
+}

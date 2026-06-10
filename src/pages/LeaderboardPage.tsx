@@ -12,7 +12,7 @@ import {
   getRisingTopics 
 } from '@/lib/api';
 import { Spinner } from '@/components/ui/spinner';
-import { Trophy, TrendingUp, BarChart2, Calendar, Crown, Zap, Flame, TrendingDown, Hash, Rocket, Sparkles } from 'lucide-react';
+import { Trophy, TrendingUp, BarChart2, Crown, Zap, Flame, TrendingDown, Hash, Rocket, Sparkles } from 'lucide-react';
 
 const LeaderboardPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'dashboard'>('leaderboard');

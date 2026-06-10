@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { extractArxivId } from '@/lib/paper';
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
@@ -33,7 +34,9 @@ api.interceptors.response.use(
       // Do not try to refresh if the failed request was a login or refresh request itself
       if (
         originalRequest.url?.includes('/auth/login') ||
+        originalRequest.url?.includes('/auth/register') ||
         originalRequest.url?.includes('/auth/refresh') ||
+        originalRequest.url?.includes('/auth/logout') ||
         originalRequest.url?.includes('/auth/forgot-password') ||
         originalRequest.url?.includes('/auth/reset-password')
       ) {
@@ -67,9 +70,7 @@ api.interceptors.response.use(
         // Retry the original request
         return api(originalRequest);
       } catch (refreshError) {
-        // If refresh fails, clear tokens and redirect to login
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        clearAuthSession();
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }
@@ -85,6 +86,41 @@ export async function login(email: string, password: string) {
   } catch (error: any) {
     const message = error.response?.data?.message || error.response?.data?.error || "Login failed";
     throw new Error(message);
+  }
+}
+
+export async function register(email: string, password: string) {
+  try {
+    const response = await api.post('/auth/register', { email, password });
+    return response.data;
+  } catch (error: any) {
+    const message = error.response?.data?.message || error.response?.data?.error || "Registration failed";
+    throw new Error(message);
+  }
+}
+
+export function clearAuthSession() {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('token');
+  sessionStorage.clear();
+
+  document.cookie.split(';').forEach((cookie) => {
+    const name = cookie.split('=')[0]?.trim();
+    if (!name) return;
+    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+  });
+}
+
+export async function logout() {
+  try {
+    const response = await api.post('/auth/logout');
+    return response.data;
+  } catch (error: any) {
+    const message = error.response?.data?.message || error.response?.data?.error || "Logout failed";
+    throw new Error(message);
+  } finally {
+    clearAuthSession();
   }
 }
 
@@ -212,6 +248,28 @@ export async function getFavoritePapers({
   }
 }
 
+/** Paginate /users/me/favorites and collect arxiv_id values for star mapping on Feed */
+export async function getFavoriteArxivIds(): Promise<string[]> {
+  const ids = new Set<string>();
+  const limit = 100;
+  let page = 1;
+
+  while (true) {
+    const response = await getFavoritePapers({ page, limit });
+    const items = Array.isArray(response) ? response : (response?.data || []);
+
+    for (const item of items) {
+      const arxivId = extractArxivId(item as Record<string, unknown>);
+      if (arxivId) ids.add(arxivId);
+    }
+
+    if (items.length < limit) break;
+    page += 1;
+  }
+
+  return [...ids];
+}
+
 export async function getHistoryPapers({
   page = 1,
   limit = 20,
@@ -230,29 +288,20 @@ export async function getHistoryPapers({
   }
 }
 
-export async function getDuplicatePapers({
-  parentId,
-  page = 1,
-  limit = 20,
+export async function getYouMightLikePapers({
+  paperTopics,
+  excludeArxivId,
 }: {
-  parentId?: string;
-  page?: number;
-  limit?: number;
+  paperTopics: string[];
+  excludeArxivId: string;
 }) {
   try {
-    const params: Record<string, string> = { page: String(page), limit: String(limit) };
-    if (parentId) params.parentId = parentId;
-    const response = await api.get('/papers/es/duplicates/list', { params });
-    return response.data;
-  } catch (error: any) {
-    const message = error.response?.data?.message || error.response?.data?.error || "Failed to fetch duplicate papers";
-    throw new Error(message);
-  }
-}
-
-export async function getRecommendedPapers(id: string) {
-  try {
-    const response = await api.get(`/papers/es/${id}/you-might-like`);
+    const response = await api.get('/papers/you-might-like', {
+      params: {
+        paperTopics: paperTopics.join(','),
+        excludeArxivId,
+      },
+    });
     return response.data;
   } catch (error: any) {
     const message = error.response?.data?.message || error.response?.data?.error || "Failed to fetch recommended papers";
@@ -365,6 +414,36 @@ export async function getCurrentUser() {
   } catch (error: any) {
     const message = error.response?.data?.message || error.response?.data?.error || "Failed to fetch user profile";
     throw new Error(message);
+  }
+}
+
+export async function getNotifications(userId: string, page: number = 1, limit: number = 5) {
+  try {
+    const response = await api.get('/notifications', { params: { userId, page, limit } });
+    return response.data;
+  } catch (error: any) {
+    console.error("Failed to fetch notifications", error);
+    return null;
+  }
+}
+
+export async function markNotificationAsRead(notificationId: string) {
+  try {
+    const response = await api.patch(`/notifications/${notificationId}/read`);
+    return response.data;
+  } catch (error: any) {
+    console.error("Failed to mark notification as read", error);
+    return null;
+  }
+}
+
+export async function markAllNotificationsAsRead(userId: string) {
+  try {
+    const response = await api.patch('/notifications/mark-all-read', null, { params: { userId } });
+    return response.data;
+  } catch (error: any) {
+    console.error("Failed to mark all notifications as read", error);
+    return null;
   }
 }
 
