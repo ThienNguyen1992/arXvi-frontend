@@ -93,28 +93,30 @@ const ManageTopicsPage: React.FC = () => {
   const categories = Array.isArray(categoriesData) ? categoriesData : (categoriesData?.data || []);
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-4">
+    <div className="-mx-8 -mt-8 flex min-h-full flex-col text-foreground">
+      <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between border-b border-border bg-background/95 px-6 py-3 backdrop-blur-md">
+        <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => navigate('/home')}
-            className="p-2 hover:bg-accent rounded-full transition-colors text-muted-foreground hover:text-foreground"
+            className="cursor-pointer rounded-full p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            aria-label="Back to home"
           >
             <ArrowLeft size={20} />
           </button>
           <div className="flex items-center gap-2">
-            <div className="bg-primary/20 p-2 rounded-lg text-primary">
-              <Tag size={20} />
+            <div className="rounded-lg bg-primary/20 p-1.5 text-primary">
+              <Tag size={18} />
             </div>
-            <h1 className="text-xl font-bold">Manage Your Topics</h1>
+            <h1 className="text-base font-bold sm:text-lg">Manage Your Topics</h1>
           </div>
         </div>
 
         <button
+          type="button"
           onClick={handleSave}
           disabled={saveMutation.isPending || selectedCodes.size < 3}
-          className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-md transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 sm:py-2.5 sm:text-base"
         >
           {saveMutation.isPending ? (
             <Spinner size={18} className="text-primary-foreground" />
@@ -125,8 +127,7 @@ const ManageTopicsPage: React.FC = () => {
         </button>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 p-6 md:p-10 overflow-y-auto max-w-6xl mx-auto w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-6 md:px-8 md:py-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="mb-8">
           <p className="text-muted-foreground text-lg">
             Customize your feed by selecting the topics that interest you. You have currently selected{' '}
@@ -210,7 +211,7 @@ const ManageTopicsPage: React.FC = () => {
         </div>
       </main>
     </div>
-  );
+  )
 };
 
 export default ManageTopicsPage;

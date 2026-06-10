@@ -119,7 +119,7 @@ export default function TourPage() {
               <Button
                 onClick={() => setStep(2)}
                 disabled={selectedCategoryIds.length === 0}
-                className="w-full sm:w-auto text-base font-bold px-10 py-6 h-auto rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
+                className="h-10 w-full min-w-[9rem] px-8 text-base font-bold rounded-xl sm:w-auto sm:min-w-[11rem]"
               >
                 Next
               </Button>
@@ -234,7 +234,7 @@ export default function TourPage() {
                 onClick={handleSubmit}
                 disabled={selectedTopicCodes.length < 3 || mutation.isPending}
                 loading={mutation.isPending}
-                className="w-full sm:w-auto text-base font-bold px-10 py-6 h-auto rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
+                className="h-10 w-full min-w-[9rem] px-8 text-base font-bold rounded-xl sm:w-auto sm:min-w-[11rem]"
               >
                 Finish &amp; Continue
               </Button>

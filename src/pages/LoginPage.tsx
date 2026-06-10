@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,8 +16,12 @@ function DailyLogo() {
 }
 
 export default function LoginPage() {
-  const navigate = useNavigate();
-  
+  const navigate = useNavigate()
+  const location = useLocation()
+  const from =
+    (location.state as { from?: { pathname?: string } } | null)?.from
+      ?.pathname ?? "/home"
+
   useEffect(() => {
     document.title = "Log in | arXvi";
   }, []);
@@ -75,9 +79,9 @@ export default function LoginPage() {
       }
       
       if (data?.user?.isFirstLogged) {
-        navigate("/tour");
+        navigate("/tour")
       } else {
-        navigate("/");
+        navigate(from, { replace: true })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
@@ -96,7 +100,7 @@ export default function LoginPage() {
       <div className="relative z-10 flex w-full max-w-[26rem] flex-col items-center gap-8">
         <DailyLogo />
 
-        <div className="w-full rounded-2xl border border-pepper-40 bg-pepper-70/80 p-8 shadow-[0_8px_32px_color-mix(in_srgb,var(--color-pepper-90)_60%,transparent)] backdrop-blur-sm">
+        <div className="w-full rounded-2xl border border-border bg-card p-8 shadow-[0_8px_32px_color-mix(in_srgb,var(--background)_60%,transparent)] backdrop-blur-sm">
           <div className="mb-8 text-center">
             <h1 className="text-xl font-bold text-foreground">Welcome back!</h1>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -121,7 +125,7 @@ export default function LoginPage() {
                   setEmailError(validateEmail(e.target.value));
                 }}
                 required
-                className="h-11 rounded-xl border-pepper-40 bg-pepper-80/50 px-4 text-foreground placeholder:text-pepper-10/60 focus-visible:border-cabbage-50 focus-visible:ring-cabbage-50/30"
+                className="h-11 rounded-xl px-4"
               />
               {emailError && <p className="text-red-500 text-sm mt-1">{emailError}</p>}
             </div>
@@ -142,7 +146,7 @@ export default function LoginPage() {
                   setPasswordError(validatePassword(e.target.value));
                 }}
                 required
-                className="h-11 rounded-xl border-pepper-40 bg-pepper-80/50 px-4 text-foreground placeholder:text-pepper-10/60 focus-visible:border-cabbage-50 focus-visible:ring-cabbage-50/30"
+                className="h-11 rounded-xl px-4"
               />
               {passwordError && <p className="text-red-500 text-sm mt-1">{passwordError}</p>}
               
@@ -157,30 +161,26 @@ export default function LoginPage() {
               type="submit"
               disabled={!email || !password || emailError !== null || passwordError !== null}
               loading={loading}
-              className="mt-1 h-11 w-full rounded-xl bg-primary text-primary-foreground text-base font-bold hover:bg-primary/90 disabled:opacity-60"
+              className="mt-1 h-11 !w-full rounded-xl text-base font-bold"
             >
               Log in
             </Button>
             
-            <div className="flex justify-center mt-2">
-              <Link to="/forgot-password" className="text-sm font-medium text-water-30 hover:text-water-20 transition-colors">
-                Forgot password?
-              </Link>
-            </div>
+
           </form>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
             <Link
               to="/signup"
-              className="font-medium text-water-30 transition-colors hover:text-water-20"
+              className="font-medium text-primary transition-colors hover:text-primary/80"
             >
               Sign up
             </Link>
           </p>
         </div>
 
-        <p className="text-center text-xs text-pepper-10/70">
+        <p className="text-center text-xs text-muted-foreground">
           Where developers grow together
         </p>
       </div>

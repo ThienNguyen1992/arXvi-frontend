@@ -2,25 +2,135 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Loader2, Star, Search } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getUserTopics, getPapers, getFavoritePapers, getHistoryPapers, addFavoritePaper, removeFavoritePaper, getDuplicatePapers } from '@/lib/api';
+import { getCategories, getUserTopics, getPapers, getFavoritePapers, getFavoriteArxivIds, getHistoryPapers, addFavoritePaper, removeFavoritePaper } from '@/lib/api';
 import { Spinner } from '@/components/ui/spinner';
+import type { Category } from '@/store/useCategoryStore';
+import {
+  CATEGORY_TAG_TEXT_COLOR,
+  buildTopicTagStyleMap,
+  pickUniqueTagStyle,
+  type CategoryTag,
+} from '@/lib/category-tags';
+import { extractArxivId, extractPaperIds, getPaperRouteId } from '@/lib/paper';
+
+function buildTopicMaps(categories: Category[]) {
+  const topicByCode = new Map<string, string>();
+  const topicCodes: string[] = [];
+
+  for (const category of categories) {
+    for (const topic of category.topics ?? []) {
+      topicByCode.set(topic.code, topic.title);
+      topicCodes.push(topic.code);
+    }
+  }
+
+  const styleByTopicCode = buildTopicTagStyleMap(topicCodes);
+
+  return { topicByCode, styleByTopicCode };
+}
+
+function resolveTopicLabel(code: string, maps: ReturnType<typeof buildTopicMaps>) {
+  return maps.topicByCode.get(code) ?? code;
+}
+
+function resolvePaperTopicTags(
+  paper: Record<string, unknown>,
+  maps: ReturnType<typeof buildTopicMaps>
+): CategoryTag[] {
+  // API search returns topic codes under `categories`
+  const raw =
+    paper.categories ??
+    paper.topics ??
+    paper.topic_codes ??
+    paper.tags ??
+    (paper.paper as Record<string, unknown> | undefined)?.categories ??
+    (paper.paper as Record<string, unknown> | undefined)?.topics;
+
+  if (!raw) return [];
+
+  const items = Array.isArray(raw) ? raw : [raw];
+  const seen = new Set<string>();
+  const usedBackgrounds = new Set<string>();
+  const tags: CategoryTag[] = [];
+
+  const addTag = (code: string, label: string) => {
+    if (!label || seen.has(label)) return;
+    seen.add(label);
+
+    const style = pickUniqueTagStyle(
+      maps.styleByTopicCode.get(code),
+      usedBackgrounds,
+      maps.styleByTopicCode.size + tags.length
+    );
+    usedBackgrounds.add(style.background);
+
+    tags.push({
+      label,
+      background: style.background,
+      borderColor: style.borderColor,
+    });
+  };
+
+  for (const item of items) {
+    if (typeof item === 'string') {
+      addTag(item, resolveTopicLabel(item, maps));
+      continue;
+    }
+
+    if (item && typeof item === 'object') {
+      const obj = item as Record<string, unknown>;
+      const code = typeof obj.code === 'string' ? obj.code : '';
+      const label =
+        typeof obj.title === 'string'
+          ? obj.title
+          : code
+            ? resolveTopicLabel(code, maps)
+            : '';
+
+      if (label) {
+        addTag(code || label, label);
+      }
+    }
+  }
+
+  return tags.slice(0, 3);
+}
+
+function resolveIsFavorited(
+  paper: Record<string, unknown>,
+  knownFavoriteArxivIds: Set<string>,
+  localFavorites: Record<string, boolean>,
+  onFavoritesTab: boolean
+) {
+  const ids = extractPaperIds(paper);
+  const arxivId = extractArxivId(paper);
+
+  for (const id of ids) {
+    if (localFavorites[id] !== undefined) {
+      return localFavorites[id];
+    }
+  }
+
+  if (onFavoritesTab) return true;
+  if (arxivId && knownFavoriteArxivIds.has(arxivId)) return true;
+
+  return false;
+}
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
   
-  let activeTabState: 'feed' | 'favorites' | 'history' | 'duplicates' = 'feed';
+  let activeTabState: 'feed' | 'favorites' | 'history' = 'feed';
   if (location.pathname === '/favorites') activeTabState = 'favorites';
   else if (location.pathname === '/history') activeTabState = 'history';
-  else if (location.pathname === '/duplicates') activeTabState = 'duplicates';
 
   const [localFavorites, setLocalFavorites] = useState<Record<string, boolean>>({});
   
   useEffect(() => {
     if (activeTabState === 'favorites') document.title = "Favorites | arXvi";
     else if (activeTabState === 'history') document.title = "History | arXvi";
-    else if (activeTabState === 'duplicates') document.title = "Duplicate Papers | arXvi";
     else document.title = "Home | arXvi";
   }, [activeTabState]);
 
@@ -47,6 +157,19 @@ const HomePage: React.FC = () => {
   const userTopicCodes = userTopics
     .map((t: any) => typeof t === 'string' ? t : (t.code || ''))
     .filter(Boolean);
+
+  const { data: categoriesResponse } = useQuery({
+    queryKey: ['categories'],
+    queryFn: getCategories,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const topicMaps = React.useMemo(() => {
+    const categories = Array.isArray(categoriesResponse)
+      ? categoriesResponse
+      : (categoriesResponse?.data ?? []);
+    return buildTopicMaps(categories as Category[]);
+  }, [categoriesResponse]);
 
   // Debounce search input
   useEffect(() => {
@@ -126,33 +249,11 @@ const HomePage: React.FC = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  // 4b. Fetch duplicate papers (infinite query for Duplicates)
-  const {
-    data: duplicatesData,
-    fetchNextPage: fetchNextDuplicates,
-    hasNextPage: hasNextDuplicates,
-    isFetchingNextPage: isFetchingNextDuplicates,
-    status: duplicatesStatus,
-  } = useInfiniteQuery({
-    queryKey: ['papers', 'duplicates', debouncedSearch],
-    queryFn: ({ pageParam = 1 }) => getDuplicatePapers({ 
-      parentId: debouncedSearch || undefined, 
-      page: pageParam as number, 
-      limit: 20 
-    }),
-    getNextPageParam: (lastPage, allPages) => {
-      const items = Array.isArray(lastPage) ? lastPage : (lastPage?.data || []);
-      return items.length === 20 ? allPages.length + 1 : undefined;
-    },
-    initialPageParam: 1,
-    enabled: activeTabState === 'duplicates',
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // 5. Fetch all favorites for global mapping
-  const { data: allFavoritesData } = useQuery({
-    queryKey: ['papers', 'allFavorites'],
-    queryFn: () => getFavoritePapers({ page: 1, limit: 1000 }),
+  // 5. Load /users/me/favorites on Feed to map arxiv_id → yellow star
+  const { data: favoriteArxivIds = [] } = useQuery({
+    queryKey: ['papers', 'favoriteArxivIds'],
+    queryFn: getFavoriteArxivIds,
+    enabled: activeTabState === 'feed',
     staleTime: 5 * 60 * 1000,
   });
 
@@ -167,8 +268,6 @@ const HomePage: React.FC = () => {
             fetchNextFav();
           } else if (activeTabState === 'history' && hasNextHistory && !isFetchingNextHistory) {
             fetchNextHistory();
-          } else if (activeTabState === 'duplicates' && hasNextDuplicates && !isFetchingNextDuplicates) {
-            fetchNextDuplicates();
           }
         }
       },
@@ -180,55 +279,50 @@ const HomePage: React.FC = () => {
     }
 
     return () => observer.disconnect();
-  }, [activeTabState, hasNextFeed, isFetchingNextFeed, fetchNextFeed, hasNextFav, isFetchingNextFav, fetchNextFav, hasNextHistory, isFetchingNextHistory, fetchNextHistory, hasNextDuplicates, isFetchingNextDuplicates, fetchNextDuplicates]);
+  }, [activeTabState, hasNextFeed, isFetchingNextFeed, fetchNextFeed, hasNextFav, isFetchingNextFav, fetchNextFav, hasNextHistory, isFetchingNextHistory, fetchNextHistory]);
 
-  // Extract known favorites from favData to sync with Feed
-  const knownFavoriteIds = React.useMemo(() => {
-    const ids = new Set<string>();
-    
-    if (favData) {
-      favData.pages.forEach(page => {
-        const items = Array.isArray(page) ? page : (page?.data || []);
-        items.forEach((p: any) => {
-          if (p.id) ids.add(p.id);
-          if (p.paper_id) ids.add(p.paper_id);
-          if (p.paper?.id) ids.add(p.paper.id);
-          if (p.arxiv_id) ids.add(p.arxiv_id);
-          if (p.paper?.arxiv_id) ids.add(p.paper.arxiv_id);
-        });
-      });
-    }
-
-    if (allFavoritesData) {
-      const items = Array.isArray(allFavoritesData) ? allFavoritesData : (allFavoritesData.data || []);
-      items.forEach((p: any) => {
-        if (p.id) ids.add(p.id);
-        if (p.paper_id) ids.add(p.paper_id);
-        if (p.paper?.id) ids.add(p.paper.id);
-        if (p.arxiv_id) ids.add(p.arxiv_id);
-        if (p.paper?.arxiv_id) ids.add(p.paper.arxiv_id);
-      });
-    }
-
-    return ids;
-  }, [favData, allFavoritesData]);
+  const knownFavoriteArxivIds = React.useMemo(
+    () => new Set(favoriteArxivIds),
+    [favoriteArxivIds]
+  );
 
   const toggleFavoriteMutation = useMutation({
-    mutationFn: async ({ id, isFavorited }: { id: string, isFavorited: boolean }) => {
+    mutationFn: async ({
+      favoriteKey,
+      isFavorited,
+    }: {
+      favoriteKey: string;
+      isFavorited: boolean;
+      relatedIds: string[];
+    }) => {
       if (isFavorited) {
-        return removeFavoritePaper(id);
-      } else {
-        return addFavoritePaper(id);
+        return removeFavoritePaper(favoriteKey);
       }
+      return addFavoritePaper(favoriteKey);
     },
-    onMutate: async ({ id, isFavorited }) => {
-      // Optimistic update
-      setLocalFavorites(prev => ({ ...prev, [id]: !isFavorited }));
+    onMutate: async ({ isFavorited, relatedIds }) => {
+      setLocalFavorites((prev) => {
+        const next = { ...prev };
+        const nextValue = !isFavorited;
+        relatedIds.forEach((id) => {
+          next[id] = nextValue;
+        });
+        return next;
+      });
+    },
+    onError: (_error, { isFavorited, relatedIds }) => {
+      setLocalFavorites((prev) => {
+        const next = { ...prev };
+        relatedIds.forEach((id) => {
+          next[id] = isFavorited;
+        });
+        return next;
+      });
     },
     onSettled: () => {
-      // Background refetch favorites list to stay in sync
       queryClient.invalidateQueries({ queryKey: ['papers', 'favorites'] });
-    }
+      queryClient.invalidateQueries({ queryKey: ['papers', 'favoriteArxivIds'] });
+    },
   });
 
   const calculateReadTime = (text: string) => {
@@ -256,16 +350,14 @@ const HomePage: React.FC = () => {
     activeData = favData; activeStatus = favStatus; isFetchingNext = isFetchingNextFav; hasNext = hasNextFav;
   } else if (activeTabState === 'history') {
     activeData = historyData; activeStatus = historyStatus; isFetchingNext = isFetchingNextHistory; hasNext = hasNextHistory;
-  } else if (activeTabState === 'duplicates') {
-    activeData = duplicatesData; activeStatus = duplicatesStatus; isFetchingNext = isFetchingNextDuplicates; hasNext = hasNextDuplicates;
   }
   
   const allPapers = activeData?.pages.flatMap((page) => Array.isArray(page) ? page : (page?.data || [])) || [];
 
   return (
-    <div className="max-w-7xl mx-auto animate-in fade-in duration-500">
-      {/* Search Bar for Feed & Duplicates */}
-            {(activeTabState === 'feed' || activeTabState === 'duplicates') && (
+    <div className="-mx-8 px-4 animate-in fade-in duration-500">
+      {/* Search Bar for Feed */}
+            {activeTabState === 'feed' && (
               <div className="mb-8 bg-card border border-border rounded-2xl overflow-hidden shadow-sm focus-within:ring-2 focus-within:ring-primary/50 transition-all">
                 <div className="flex items-center px-5 py-4 border-b border-border/50">
                   <Search size={22} className="text-muted-foreground shrink-0 mr-4" />
@@ -273,40 +365,38 @@ const HomePage: React.FC = () => {
                     type="text" 
                     value={searchText}
                     onChange={(e) => setSearchText(e.target.value)}
-                    placeholder={activeTabState === 'duplicates' ? "Search duplicates by arXiv ID..." : "Search posts by title or author..."}
+                    placeholder="Search posts by title or author..."
                     className="w-full bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground text-lg"
                   />
                 </div>
-                {activeTabState !== 'duplicates' && (
-                  <div className="px-5 py-3 bg-muted/30 flex items-center gap-3">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Search Tags:</span>
-                    <button 
-                      onClick={() => setActiveTags(prev => ({ ...prev, title: !prev.title }))}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
-                        activeTags.title
-                          ? 'bg-primary/20 border-primary text-primary shadow-sm' 
-                          : 'bg-background border-border text-foreground hover:bg-accent'
-                      }`}
-                    >
-                      # Title
-                    </button>
-                    <button 
-                      onClick={() => setActiveTags(prev => ({ ...prev, author: !prev.author }))}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
-                        activeTags.author
-                          ? 'bg-primary/20 border-primary text-primary shadow-sm' 
-                          : 'bg-background border-border text-foreground hover:bg-accent'
-                      }`}
-                    >
-                      # Author
-                    </button>
-                  </div>
-                )}
+                <div className="px-5 py-3 bg-muted/30 flex items-center gap-3">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Search Tags:</span>
+                  <button 
+                    onClick={() => setActiveTags(prev => ({ ...prev, title: !prev.title }))}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+                      activeTags.title
+                        ? 'bg-primary/20 border-primary text-primary shadow-sm' 
+                        : 'bg-background border-border text-foreground hover:bg-accent'
+                    }`}
+                  >
+                    # Title
+                  </button>
+                  <button 
+                    onClick={() => setActiveTags(prev => ({ ...prev, author: !prev.author }))}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+                      activeTags.author
+                        ? 'bg-primary/20 border-primary text-primary shadow-sm' 
+                        : 'bg-background border-border text-foreground hover:bg-accent'
+                    }`}
+                  >
+                    # Author
+                  </button>
+                </div>
               </div>
             )}
 
             <h1 className="text-3xl font-extrabold mb-8 text-foreground tracking-tight">
-              {activeTabState === 'feed' ? 'Your Daily Feed' : (activeTabState === 'favorites' ? 'Your Favorites' : (activeTabState === 'history' ? 'Your History' : 'Duplicate Papers'))}
+              {activeTabState === 'feed' ? 'Your Daily Feed' : (activeTabState === 'favorites' ? 'Your Favorites' : 'Your History')}
             </h1>
             
             {activeStatus === 'pending' ? (
@@ -328,86 +418,114 @@ const HomePage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {allPapers.map((item: any, index: number) => {
                     const paper = item.paper || item;
-                    // Distinguish between backend UUID and arxiv_id
-                    const paperId = paper.id;
-                    const arxivId = paper.arxiv_id || paper.id || `paper-${index}`;
+                    const routeId = getPaperRouteId(paper);
+                    const arxivId = extractArxivId(paper) || routeId;
                     
                     const title = paper.title || paper.name || 'Untitled Paper';
                     const description = paper.abstract || paper.summary || paper.description || '';
-                    const tags = paper.topics || paper.tags || ['Tech'];
+                    const topicTags = resolvePaperTopicTags(paper, topicMaps);
                     const date = formatDate(paper.published_at || paper.created_at || paper.date);
                     const readTime = calculateReadTime(description);
-                    const imageUrl = paper.image_url || `https://picsum.photos/seed/${arxivId}/600/400`;
-                    
-                    // Determine favorite state: Local state takes priority. If not in local state, use API field (if provided), or default for favorites tab.
-                    const isFavoritedAPI = paper.is_favorited === true || activeTabState === 'favorites' || knownFavoriteIds.has(arxivId) || knownFavoriteIds.has(paperId);
-                    const isFavorited = localFavorites[arxivId] !== undefined ? localFavorites[arxivId] : isFavoritedAPI;
+                    const imageUrl = paper.image_url || `https://picsum.photos/seed/${arxivId || routeId || index}/600/400`;
+                    const paperIds = extractPaperIds(paper);
+                    const favoriteKey = arxivId || paperIds[0] || "";
+                    const isFavorited = resolveIsFavorited(
+                      paper,
+                      knownFavoriteArxivIds,
+                      localFavorites,
+                      activeTabState === "favorites"
+                    );
                     
                     return (
                       <div 
-                        key={`${activeTabState}-${paperId || arxivId}-${index}`} 
-                        onClick={() => navigate(`/paper/${arxivId}`)}
+                        key={`${activeTabState}-${routeId || arxivId}-${index}`} 
+                        onClick={() => routeId && navigate(`/paper/${routeId}`)}
                         className="bg-card border border-border rounded-xl shadow-sm transition-all hover:shadow-md hover:border-primary/50 flex flex-col overflow-hidden group cursor-pointer"
                       >
                         {/* Image container */}
-                        <div className="relative w-full h-40 overflow-hidden bg-muted">
-                          <img 
-                            src={imageUrl} 
-                            alt={title} 
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        <div className="relative w-full h-28 overflow-hidden bg-muted">
+                          <img
+                            src={imageUrl}
+                            alt={title}
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                             loading="lazy"
                           />
-                          <button 
+                          <button
+                            type="button"
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              if (arxivId) {
-                                toggleFavoriteMutation.mutate({ id: arxivId, isFavorited });
-                              }
+                              if (!favoriteKey) return;
+                              toggleFavoriteMutation.mutate({
+                                favoriteKey,
+                                isFavorited,
+                                relatedIds: paperIds.length > 0 ? paperIds : [favoriteKey],
+                              });
                             }}
-                            className="absolute top-3 right-3 p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border shadow-sm hover:bg-background transition-colors z-10 cursor-pointer disabled:cursor-not-allowed"
-                            disabled={toggleFavoriteMutation.isPending && toggleFavoriteMutation.variables?.id === arxivId}
+                            className="absolute top-2 right-2 z-10 cursor-pointer rounded-full border border-border bg-background/80 p-1.5 shadow-sm backdrop-blur-sm transition-colors hover:bg-background disabled:cursor-not-allowed"
+                            disabled={
+                              !favoriteKey ||
+                              (toggleFavoriteMutation.isPending &&
+                                toggleFavoriteMutation.variables?.favoriteKey === favoriteKey)
+                            }
                           >
-                            <Star size={18} className={isFavorited ? "fill-primary text-primary" : "text-muted-foreground"} />
+                            <Star
+                              size={16}
+                              className={
+                                isFavorited
+                                  ? "fill-cheese-50 text-cheese-50"
+                                  : "text-muted-foreground"
+                              }
+                            />
                           </button>
                         </div>
 
-                        <div className="p-5 flex flex-col flex-1">
+                        <div className="p-3 flex flex-col flex-1">
                           {/* Title */}
-                          <h3 className="text-lg font-bold text-foreground mb-2 line-clamp-2 leading-tight">
+                          <h3 className="text-sm font-bold text-foreground mb-1.5 line-clamp-2 leading-snug">
                             {title}
                           </h3>
                           
-                          {/* Tags / Code */}
-                          <div className="flex flex-wrap gap-2 mb-3">
-                            {(Array.isArray(tags) ? tags.slice(0, 3) : [tags]).map((tag: any, idx: number) => (
-                              <span key={idx} className="rounded-md bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary border border-primary/20">
-                                #{typeof tag === 'object' ? tag.code || tag.title : tag}
-                              </span>
-                            ))}
-                          </div>
+                          {topicTags.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              {topicTags.map((tag) => (
+                                <span
+                                  key={tag.label}
+                                  title={tag.label}
+                                  className="inline-flex max-w-full items-center truncate rounded-full border px-2 py-0.5 text-[10px] font-medium leading-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
+                                  style={{
+                                    background: tag.background,
+                                    borderColor: tag.borderColor,
+                                    color: CATEGORY_TAG_TEXT_COLOR,
+                                  }}
+                                >
+                                  <span className="truncate">#{tag.label}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
 
                           {/* Date & Read Time */}
-                          <div className="flex items-center text-xs font-medium text-muted-foreground mb-4">
+                          <div className="flex items-center text-[11px] font-medium text-muted-foreground mb-2">
                             <span>{date}</span>
                             <span className="mx-2">•</span>
                             <span>{readTime} min read</span>
                           </div>
                           
                           {/* Author & Read More */}
-                          <div className="mt-auto pt-4 border-t border-border/50 flex items-center justify-between">
+                          <div className="mt-auto pt-2 border-t border-border/50 flex items-center justify-between gap-2">
                             <div className="flex items-center min-w-0">
-                              <span className="text-sm font-medium text-foreground line-clamp-1">
+                              <span className="text-xs font-medium text-foreground line-clamp-1">
                                 {paper.authors ? (Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors) : "Unknown Author"}
                               </span>
                             </div>
                             <a 
-                              href={`/paper/${arxivId}`}
+                              href={routeId ? `/paper/${routeId}` : "#"}
                               onClick={(e) => {
                                 e.preventDefault();
-                                navigate(`/paper/${arxivId}`);
+                                if (routeId) navigate(`/paper/${routeId}`);
                               }}
-                              className="shrink-0 text-primary hover:text-primary/80 font-bold text-sm transition-colors ml-4"
+                              className="shrink-0 text-primary hover:text-primary/80 font-semibold text-xs transition-colors"
                             >
                               Read more
                             </a>
@@ -419,7 +537,7 @@ const HomePage: React.FC = () => {
                 </div>
 
                 {/* Lazy load trigger element */}
-                <div ref={observerTarget} className="w-full py-8 flex justify-center items-center">
+                <div ref={observerTarget} className="w-full py-4 flex justify-center items-center">
                   {isFetchingNext && (
                     <div className="flex items-center gap-2 text-primary font-medium">
                       <Loader2 className="h-5 w-5 animate-spin" />

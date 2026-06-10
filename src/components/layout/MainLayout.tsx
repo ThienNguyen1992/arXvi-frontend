@@ -1,25 +1,57 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { User, LogOut, ChevronDown, Rss, Heart, Tag, Clock, Copy, BarChart2 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { getUserTopics } from '@/lib/api';
+import { User, LogOut, ChevronDown, Rss, Heart, Tag, Clock, BarChart2, Menu } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getUserTopics, logout, clearAuthSession } from '@/lib/api';
 import { Spinner } from '@/components/ui/spinner';
+import { useCategoryStore } from '@/store/useCategoryStore';
+import { cn } from '@/lib/utils';
 
 const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
+  const clearSelection = useCategoryStore((state) => state.clearSelection);
   const [showSettings, setShowSettings] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
   
-  let activeTabState: 'feed' | 'favorites' | 'history' | 'duplicates' | 'leaderboard' = 'feed';
+  let activeTabState: 'feed' | 'favorites' | 'history' | 'leaderboard' = 'feed';
   if (location.pathname === '/favorites') activeTabState = 'favorites';
   else if (location.pathname === '/history') activeTabState = 'history';
-  else if (location.pathname === '/duplicates') activeTabState = 'duplicates';
   else if (location.pathname === '/leaderboard') activeTabState = 'leaderboard';
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/login');
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setShowSettings(false);
+      }
+    };
+
+    if (showSettings) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showSettings]);
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+
+    setIsLoggingOut(true);
+    setShowSettings(false);
+
+    try {
+      await logout();
+    } catch {
+      clearAuthSession();
+    } finally {
+      clearSelection();
+      queryClient.clear();
+      setIsLoggingOut(false);
+      navigate('/login', { replace: true });
+    }
   };
 
   // Fetch user topics for Sidebar
@@ -33,15 +65,33 @@ const MainLayout: React.FC = () => {
     ? userTopicsResponse 
     : (Array.isArray(userTopicsResponse?.topics) ? userTopicsResponse.topics : []);
 
+  const handleNav = (path: string) => {
+    navigate(path);
+    if (window.matchMedia('(max-width: 1023px)').matches) {
+      setIsSidebarOpen(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
       {/* TOP HEADER */}
-      <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6 shrink-0 z-20 shadow-sm">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/home')}>
-          <div className="flex items-center gap-1 text-2xl font-bold tracking-tight">
-            <span className="text-foreground">daily</span>
-            <span className="text-primary">.</span>
-            <span className="text-foreground">dev</span>
+      <header className="relative z-50 flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 shadow-sm sm:px-6">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen((open) => !open)}
+            className="cursor-pointer rounded-lg p-2 text-foreground transition-colors hover:bg-accent"
+            aria-label={isSidebarOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={isSidebarOpen}
+          >
+            <Menu size={22} />
+          </button>
+          <div className="flex cursor-pointer items-center gap-2" onClick={() => handleNav('/home')}>
+            <div className="flex items-center gap-1 text-xl font-bold tracking-tight sm:text-2xl">
+              <span className="text-foreground">daily</span>
+              <span className="text-primary">.</span>
+              <span className="text-foreground">dev</span>
+            </div>
           </div>
         </div>
         
@@ -72,10 +122,11 @@ const MainLayout: React.FC = () => {
                 </button>
                 <button 
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-destructive/10 transition-colors text-sm font-medium text-destructive mt-1 cursor-pointer"
+                  disabled={isLoggingOut}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-destructive/10 transition-colors text-sm font-medium text-destructive mt-1 cursor-pointer disabled:opacity-50"
                 >
                   <LogOut size={18} />
-                  Logout
+                  {isLoggingOut ? 'Logging out...' : 'Logout'}
                 </button>
               </div>
             </div>
@@ -84,9 +135,25 @@ const MainLayout: React.FC = () => {
       </header>
 
       {/* BODY CONTENT */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
+        {isSidebarOpen && (
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="fixed inset-0 top-16 z-30 bg-black/40 lg:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
+
         {/* Sidebar */}
-        <aside className="w-64 bg-card border-r border-border py-6 px-4 shadow-sm flex flex-col z-10 relative shrink-0">
+        <aside
+          className={cn(
+            'flex w-64 shrink-0 flex-col border-r border-border bg-card px-4 py-6 shadow-sm transition-all duration-300 ease-in-out',
+            'fixed bottom-0 left-0 top-16 z-40 lg:static lg:top-auto lg:z-10',
+            isSidebarOpen ? 'translate-x-0' : '-translate-x-full',
+            !isSidebarOpen && 'lg:w-0 lg:overflow-hidden lg:border-0 lg:px-0 lg:translate-x-0'
+          )}
+        >
           <div className="flex flex-col h-full overflow-hidden">
             {/* Menu Section */}
             <div className="mb-8">
@@ -94,7 +161,7 @@ const MainLayout: React.FC = () => {
               <ul className="space-y-1">
                 <li>
                   <button 
-                    onClick={() => navigate('/home')}
+                    onClick={() => handleNav('/home')}
                     className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg font-medium text-sm transition-colors cursor-pointer ${
                       activeTabState === 'feed' ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent'
                     }`}
@@ -105,7 +172,7 @@ const MainLayout: React.FC = () => {
                 </li>
                 <li>
                   <button 
-                    onClick={() => navigate('/favorites')}
+                    onClick={() => handleNav('/favorites')}
                     className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg font-medium text-sm transition-colors cursor-pointer ${
                       activeTabState === 'favorites' ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent'
                     }`}
@@ -116,7 +183,7 @@ const MainLayout: React.FC = () => {
                 </li>
                 <li>
                   <button 
-                    onClick={() => navigate('/history')}
+                    onClick={() => handleNav('/history')}
                     className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg font-medium text-sm transition-colors cursor-pointer ${
                       activeTabState === 'history' ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent'
                     }`}
@@ -127,18 +194,7 @@ const MainLayout: React.FC = () => {
                 </li>
                 <li>
                   <button 
-                    onClick={() => navigate('/duplicates')}
-                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg font-medium text-sm transition-colors cursor-pointer ${
-                      activeTabState === 'duplicates' ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent'
-                    }`}
-                  >
-                    <Copy size={18} />
-                    Duplicates
-                  </button>
-                </li>
-                <li>
-                  <button 
-                    onClick={() => navigate('/leaderboard')}
+                    onClick={() => handleNav('/leaderboard')}
                     className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg font-medium text-sm transition-colors cursor-pointer ${
                       activeTabState === 'leaderboard' ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent'
                     }`}
@@ -149,7 +205,7 @@ const MainLayout: React.FC = () => {
                 </li>
                 <li>
                   <button 
-                    onClick={() => navigate('/manage-topics')}
+                    onClick={() => handleNav('/manage-topics')}
                     className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg font-medium text-sm transition-colors text-foreground hover:bg-accent cursor-pointer"
                   >
                     <Tag size={18} />

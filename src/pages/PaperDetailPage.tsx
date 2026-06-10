@@ -1,19 +1,22 @@
 import React, { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getPaperById, addHistoryPaper, getCategories, getRecommendedPapers } from '@/lib/api';
+import { getPaperById, addHistoryPaper, getCategories, getYouMightLikePapers } from '@/lib/api';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, FileText, ExternalLink } from 'lucide-react';
+import { extractArxivId, extractPaperTopicCodes, getPaperRouteId, isValidPaperId } from '@/lib/paper';
 
 const PaperDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
+  const validId = isValidPaperId(id);
+
   const { data: paper, isLoading, error } = useQuery({
     queryKey: ['paper', id],
     queryFn: () => getPaperById(id!),
-    enabled: !!id,
+    enabled: validId,
   });
 
   const { data: categoriesData } = useQuery({
@@ -21,10 +24,22 @@ const PaperDetailPage: React.FC = () => {
     queryFn: getCategories,
   });
 
+  const paperTopicCodes = React.useMemo(
+    () => (paper ? extractPaperTopicCodes(paper as Record<string, unknown>) : []),
+    [paper]
+  );
+  const excludeArxivId = paper
+    ? extractArxivId(paper as Record<string, unknown>) || id || ""
+    : "";
+
   const { data: recommendedData, isLoading: isRecommendedLoading } = useQuery({
-    queryKey: ['recommendedPapers', id],
-    queryFn: () => getRecommendedPapers(id!),
-    enabled: !!id,
+    queryKey: ['youMightLike', excludeArxivId, paperTopicCodes],
+    queryFn: () =>
+      getYouMightLikePapers({
+        paperTopics: paperTopicCodes,
+        excludeArxivId,
+      }),
+    enabled: !!paper && paperTopicCodes.length > 0 && isValidPaperId(excludeArxivId),
   });
 
   const hasRecordedHistory = React.useRef(false);
@@ -46,7 +61,18 @@ const PaperDetailPage: React.FC = () => {
       addHistoryPaper(id);
       hasRecordedHistory.current = true;
     }
-  }, [id]);
+  }, [id, validId]);
+
+  if (!validId) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center bg-background text-center px-4">
+        <p className="text-destructive font-medium mb-4">Invalid paper link.</p>
+        <Button onClick={() => navigate('/home')} className="font-semibold px-8 py-2 rounded-xl">
+          Back to Home
+        </Button>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -275,7 +301,8 @@ const PaperDetailPage: React.FC = () => {
               <div className="flex flex-col gap-4">
                 {recommendedPapers.map((rec: any, idx: number) => {
                   // extract fields
-                  const arxivId = rec.arxiv_id || rec.id || rec.paper?.arxiv_id;
+                  const recPaper = rec.paper || rec;
+                  const routeId = getPaperRouteId(recPaper as Record<string, unknown>);
                   const recTitle = rec.title || rec.paper?.title || "Untitled";
                   const recAuthors = rec.authors || rec.paper?.authors;
                   const recCats = rec.categories || rec.paper?.categories || rec.topics || [];
@@ -285,13 +312,13 @@ const PaperDetailPage: React.FC = () => {
                     <div 
                       key={idx}
                       onClick={() => {
-                        if (arxivId) navigate(`/paper/${arxivId}`);
+                        if (routeId) navigate(`/paper/${routeId}`);
                       }}
                       className="group flex flex-col bg-card border border-border hover:border-primary/50 rounded-2xl cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 overflow-hidden"
                     >
                       <div className="h-28 w-full bg-muted/50 overflow-hidden relative border-b border-border/50">
                         <img 
-                          src={`https://picsum.photos/seed/${arxivId || idx}/400/200`} 
+                          src={`https://picsum.photos/seed/${routeId || idx}/400/200`} 
                           alt="Cover Placeholder" 
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100" 
                         />
