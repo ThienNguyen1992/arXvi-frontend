@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { extractArxivId } from '@/lib/paper';
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
 const api = axios.create({
   baseURL: API_URL,
@@ -230,6 +230,16 @@ export async function getPaperById(id: string) {
   }
 }
 
+export async function getSimilarPapers(arxivId: string) {
+  try {
+    const response = await api.get(`/papers/es/${arxivId}/similar`);
+    return response.data;
+  } catch (error: any) {
+    const message = error.response?.data?.message || error.response?.data?.error || "Failed to fetch related papers";
+    throw new Error(message);
+  }
+}
+
 export async function getFavoritePapers({
   page = 1,
   limit = 20,
@@ -417,12 +427,36 @@ export async function getCurrentUser() {
   }
 }
 
-export async function getNotifications(userId: string, page: number = 1, limit: number = 5) {
+export async function getNotifications(page: number = 1, size: number = 5) {
   try {
-    const response = await api.get('/notifications', { params: { userId, page, limit } });
+    const response = await api.get('/notifications', {
+      params: { page, size },
+    });
     return response.data;
   } catch (error: any) {
     console.error("Failed to fetch notifications", error);
+    return null;
+  }
+}
+
+export async function getUnreadNotifications(page: number = 1, size: number = 5) {
+  try {
+    const response = await api.get('/notifications/unread', {
+      params: { page, size },
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error("Failed to fetch unread notifications", error);
+    return null;
+  }
+}
+
+export async function getUnreadNotificationCount() {
+  try {
+    const response = await api.get('/notifications/unread-count');
+    return response.data;
+  } catch (error: any) {
+    console.error("Failed to fetch unread notification count", error);
     return null;
   }
 }
@@ -437,9 +471,11 @@ export async function markNotificationAsRead(notificationId: string) {
   }
 }
 
-export async function markAllNotificationsAsRead(userId: string) {
+export async function markAllNotificationsAsRead(userId?: string) {
   try {
-    const response = await api.patch('/notifications/mark-all-read', null, { params: { userId } });
+    const response = await api.patch('/notifications/mark-all-read', null, {
+      params: userId ? { userId } : undefined,
+    });
     return response.data;
   } catch (error: any) {
     console.error("Failed to mark all notifications as read", error);

@@ -65,6 +65,18 @@ const ManageTopicsPage: React.FC = () => {
     setSelectedCodes(next);
   };
 
+  const toggleSelectAll = (allTopicCodes: string[]) => {
+    const allSelected =
+      allTopicCodes.length > 0 && allTopicCodes.every((code) => selectedCodes.has(code));
+
+    if (allSelected) {
+      setSelectedCodes(new Set());
+      return;
+    }
+
+    setSelectedCodes(new Set(allTopicCodes));
+  };
+
   const saveMutation = useMutation({
     mutationFn: (codes: string[]) => updateUserTopics(codes),
     onSuccess: () => {
@@ -91,6 +103,11 @@ const ManageTopicsPage: React.FC = () => {
   }
 
   const categories = Array.isArray(categoriesData) ? categoriesData : (categoriesData?.data || []);
+  const allTopicCodes: string[] = categories.flatMap((category: { topics?: Array<{ code?: string }> }) =>
+    (category.topics || []).map((topic) => topic.code).filter((code): code is string => !!code)
+  );
+  const allSelected =
+    allTopicCodes.length > 0 && allTopicCodes.every((code: string) => selectedCodes.has(code));
 
   return (
     <div className="-mx-8 -mt-8 flex min-h-full flex-col text-foreground">
@@ -141,6 +158,18 @@ const ManageTopicsPage: React.FC = () => {
               <span>⚠</span> Please select at least <strong>3 topics</strong> to continue ({3 - selectedCodes.size} more needed).
             </p>
           )}
+
+          <label className="mt-5 inline-flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm transition-colors hover:bg-accent/40">
+            <input
+              type="checkbox"
+              className="size-4 shrink-0 cursor-pointer accent-primary"
+              checked={allSelected}
+              onChange={() => toggleSelectAll(allTopicCodes)}
+            />
+            <span className="text-sm font-semibold text-foreground">
+              {allSelected ? 'Deselect all topics' : 'Select all topics'}
+            </span>
+          </label>
         </div>
 
         <div className="flex flex-col gap-10">
