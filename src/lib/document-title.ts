@@ -1,7 +1,10 @@
-const APP_NAME = "daily.dev"
+const APP_NAME = "arXvi"
 
 export const ROUTE_TITLES: Record<string, string> = {
   "/home": "Home",
+  "/favorites": "Favorites",
+  "/history": "History",
+  "/leaderboard": "Leaderboard",
   "/login": "Log in",
   "/signup": "Sign up",
   "/tour": "Tour",

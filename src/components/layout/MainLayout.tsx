@@ -6,6 +6,7 @@ import { getUserTopics, logout, clearAuthSession } from '@/lib/api';
 import { Spinner } from '@/components/ui/spinner';
 import { useCategoryStore } from '@/store/useCategoryStore';
 import { cn } from '@/lib/utils';
+import NotificationButton from '@/components/NotificationButton';
 
 const MainLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -95,7 +96,10 @@ const MainLayout: React.FC = () => {
           </div>
         </div>
         
-        <div className="relative" ref={settingsRef}>
+        <div className="flex items-center gap-1">
+          <NotificationButton />
+
+          <div className="relative" ref={settingsRef}>
           <button 
             onClick={() => setShowSettings(!showSettings)} 
             className="flex items-center gap-2 hover:bg-accent p-1.5 pr-3 rounded-full transition-colors border border-transparent hover:border-border cursor-pointer"
@@ -131,6 +135,7 @@ const MainLayout: React.FC = () => {
               </div>
             </div>
           )}
+          </div>
         </div>
       </header>
 

@@ -1,11 +1,314 @@
 import React, { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getPaperById, addHistoryPaper, getCategories, getYouMightLikePapers } from '@/lib/api';
+import { getPaperById, addHistoryPaper, getCategories, getSimilarPapers, getYouMightLikePapers } from '@/lib/api';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, FileText, ExternalLink } from 'lucide-react';
-import { extractArxivId, extractPaperTopicCodes, getPaperRouteId, isValidPaperId } from '@/lib/paper';
+import { ArrowLeft, ChevronLeft, ChevronRight, FileText, ExternalLink } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  extractArxivId,
+  extractPaperTopicCodes,
+  getPaperRouteId,
+  isValidPaperId,
+  parsePaperListResponse,
+} from '@/lib/paper';
+import {
+  CATEGORY_TAG_TEXT_COLOR,
+  buildTopicTagStyleMap,
+  pickUniqueTagStyle,
+  type CategoryTag,
+  type CategoryTagStyle,
+} from '@/lib/category-tags';
+
+function resolveTopicLabel(code: string, categoriesList: Array<{ code?: string; title?: string; topics?: Array<{ code: string; title: string }> }>) {
+  for (const cat of categoriesList) {
+    if (cat.topics) {
+      const found = cat.topics.find((t) => t.code === code);
+      if (found) return found.title;
+    }
+  }
+  const parts = code.split('.');
+  return parts.length > 1 ? parts[1] : code;
+}
+
+function resolveRecDateInfo(
+  rec: Record<string, unknown>,
+  recPaper: Record<string, unknown>
+): { label: "Published" | "Created"; value: string } | null {
+  const publishedAt = rec.published_at ?? recPaper.published_at ?? rec.date ?? recPaper.date;
+  if (publishedAt) {
+    return { label: "Published", value: String(publishedAt) };
+  }
+
+  const createdAt = rec.created_at ?? recPaper.created_at;
+  if (createdAt) {
+    return { label: "Created", value: String(createdAt) };
+  }
+
+  return null;
+}
+
+function formatRecDate(dateString: string) {
+  try {
+    return new Date(dateString).toLocaleDateString();
+  } catch {
+    return dateString;
+  }
+}
+
+function buildRecTopicTags(
+  recPaper: Record<string, unknown>,
+  categoriesList: Array<{ code?: string; title?: string; topics?: Array<{ code: string; title: string }> }>,
+  styleByTopicCode: Map<string, CategoryTagStyle>
+): CategoryTag[] {
+  const codes = extractPaperTopicCodes(recPaper).slice(0, 3);
+  const usedBackgrounds = new Set<string>();
+  const tags: CategoryTag[] = [];
+
+  for (const code of codes) {
+    const label = resolveTopicLabel(code, categoriesList);
+    const style = pickUniqueTagStyle(
+      styleByTopicCode.get(code),
+      usedBackgrounds,
+      styleByTopicCode.size + tags.length
+    );
+    usedBackgrounds.add(style.background);
+    tags.push({ label, background: style.background, borderColor: style.borderColor });
+  }
+
+  return tags;
+}
+
+function buildTagStyleMapFromPapers(papers: unknown[]) {
+  const codes: string[] = [];
+  for (const rec of papers) {
+    const recPaper = ((rec as { paper?: unknown }).paper || rec) as Record<string, unknown>;
+    codes.push(...extractPaperTopicCodes(recPaper));
+  }
+  return buildTopicTagStyleMap([...new Set(codes)]);
+}
+
+type CategoriesList = Array<{
+  code?: string;
+  title?: string;
+  topics?: Array<{ code: string; title: string }>;
+}>;
+
+function PaperRecommendationCard({
+  rec,
+  idx,
+  categoriesList,
+  tagStyleMap,
+  onNavigate,
+  className,
+}: {
+  rec: unknown;
+  idx: number;
+  categoriesList: CategoriesList;
+  tagStyleMap: Map<string, CategoryTagStyle>;
+  onNavigate: (routeId: string) => void;
+  className?: string;
+}) {
+  const recPaper = ((rec as { paper?: unknown }).paper || rec) as Record<string, unknown>;
+  const routeId = getPaperRouteId(recPaper);
+  const recTitle = (recPaper.title as string) || (rec as { title?: string }).title || 'Untitled';
+  const recAuthorsRaw = recPaper.authors || (rec as { authors?: unknown }).authors;
+  const recAuthorsText = Array.isArray(recAuthorsRaw)
+    ? recAuthorsRaw.join(', ')
+    : recAuthorsRaw
+      ? String(recAuthorsRaw)
+      : '';
+  const recDateInfo = resolveRecDateInfo(rec as Record<string, unknown>, recPaper);
+  const recTopicTags = buildRecTopicTags(recPaper, categoriesList, tagStyleMap);
+
+  return (
+    <div
+      onClick={() => routeId && onNavigate(routeId)}
+      className={cn(
+        'group flex flex-col bg-card border border-border hover:border-primary/50 rounded-2xl cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 overflow-hidden',
+        className
+      )}
+    >
+      <div className="h-28 w-full bg-muted/50 overflow-hidden relative border-b border-border/50">
+        <img
+          src={`https://picsum.photos/seed/${routeId || idx}/400/200`}
+          alt="Cover Placeholder"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100"
+        />
+      </div>
+
+      <div className="p-4 flex flex-col gap-1.5 flex-1">
+        <h3 className="font-bold text-foreground text-xs line-clamp-2 group-hover:text-primary transition-colors leading-snug">
+          {recTitle}
+        </h3>
+        {recTopicTags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {recTopicTags.map((tag) => (
+              <span
+                key={tag.label}
+                title={tag.label}
+                className="inline-flex max-w-full items-center truncate rounded-full border px-2 py-0.5 text-[10px] font-medium leading-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
+                style={{
+                  background: tag.background,
+                  borderColor: tag.borderColor,
+                  color: CATEGORY_TAG_TEXT_COLOR,
+                }}
+              >
+                <span className="truncate">#{tag.label}</span>
+              </span>
+            ))}
+          </div>
+        )}
+        {recAuthorsText && (
+          <p className="text-[11px] text-muted-foreground line-clamp-1">{recAuthorsText}</p>
+        )}
+        {recDateInfo && (
+          <p className="text-[10px] text-muted-foreground mt-auto font-medium opacity-80">
+            <span className="font-bold uppercase tracking-widest">{recDateInfo.label} day</span>
+            <span className="mx-1.5 opacity-50">·</span>
+            <span>{formatRecDate(recDateInfo.value)}</span>
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecommendationCards({
+  title,
+  papers,
+  isLoading,
+  emptyText,
+  categoriesList,
+  tagStyleMap,
+  onNavigate,
+}: {
+  title: string;
+  papers: unknown[];
+  isLoading: boolean;
+  emptyText: string;
+  categoriesList: CategoriesList;
+  tagStyleMap: Map<string, CategoryTagStyle>;
+  onNavigate: (routeId: string) => void;
+}) {
+  return (
+    <div className="bg-muted/20 border border-border/50 rounded-3xl p-6 shadow-sm">
+      <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-6">{title}</h2>
+
+      {isLoading ? (
+        <div className="flex justify-center py-10">
+          <Spinner size={32} className="text-primary" />
+        </div>
+      ) : papers.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-4">{emptyText}</p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {papers.map((rec, idx) => {
+            const recPaper = ((rec as { paper?: unknown }).paper || rec) as Record<string, unknown>;
+            const routeId = getPaperRouteId(recPaper);
+            return (
+              <PaperRecommendationCard
+                key={routeId || idx}
+                rec={rec}
+                idx={idx}
+                categoriesList={categoriesList}
+                tagStyleMap={tagStyleMap}
+                onNavigate={onNavigate}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RelatedPapersCarousel({
+  papers,
+  isLoading,
+  emptyText,
+  categoriesList,
+  tagStyleMap,
+  onNavigate,
+}: {
+  papers: unknown[];
+  isLoading: boolean;
+  emptyText: string;
+  categoriesList: CategoriesList;
+  tagStyleMap: Map<string, CategoryTagStyle>;
+  onNavigate: (routeId: string) => void;
+}) {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollBy = (direction: 'left' | 'right') => {
+    scrollRef.current?.scrollBy({
+      left: direction === 'left' ? -272 : 272,
+      behavior: 'smooth',
+    });
+  };
+
+  return (
+    <section className="mt-10 border-t border-border/50 pt-8">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
+          Related Papers
+        </h2>
+        {papers.length > 0 && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => scrollBy('left')}
+              className="cursor-pointer rounded-full border border-border bg-card p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="Scroll related papers left"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollBy('right')}
+              className="cursor-pointer rounded-full border border-border bg-card p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="Scroll related papers right"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-10">
+          <Spinner size={32} className="text-primary" />
+        </div>
+      ) : papers.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-border/60 py-8 text-center text-sm text-muted-foreground">
+          {emptyText}
+        </p>
+      ) : (
+        <div
+          ref={scrollRef}
+          className="scrollbar-hide -mx-1 flex gap-4 overflow-x-auto px-1 pb-2 snap-x snap-mandatory"
+        >
+          {papers.map((rec, idx) => {
+            const recPaper = ((rec as { paper?: unknown }).paper || rec) as Record<string, unknown>;
+            const routeId = getPaperRouteId(recPaper);
+            return (
+              <PaperRecommendationCard
+                key={routeId || idx}
+                rec={rec}
+                idx={idx}
+                categoriesList={categoriesList}
+                tagStyleMap={tagStyleMap}
+                onNavigate={onNavigate}
+                className="w-64 shrink-0 snap-start"
+              />
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
 
 const PaperDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +335,18 @@ const PaperDetailPage: React.FC = () => {
     ? extractArxivId(paper as Record<string, unknown>) || id || ""
     : "";
 
+  const similarArxivId = id || excludeArxivId;
+
+  const {
+    data: similarData,
+    isLoading: isSimilarLoading,
+    isError: isSimilarError,
+  } = useQuery({
+    queryKey: ['similarPapers', similarArxivId],
+    queryFn: () => getSimilarPapers(similarArxivId!),
+    enabled: isValidPaperId(similarArxivId),
+  });
+
   const { data: recommendedData, isLoading: isRecommendedLoading } = useQuery({
     queryKey: ['youMightLike', excludeArxivId, paperTopicCodes],
     queryFn: () =>
@@ -41,6 +356,20 @@ const PaperDetailPage: React.FC = () => {
       }),
     enabled: !!paper && paperTopicCodes.length > 0 && isValidPaperId(excludeArxivId),
   });
+
+  const similarPapers = React.useMemo(() => parsePaperListResponse(similarData), [similarData]);
+  const recommendedPapers = React.useMemo(() => parsePaperListResponse(recommendedData), [recommendedData]);
+  const similarCount = Number((paper as Record<string, unknown> | undefined)?.similarCount ?? NaN);
+
+  const similarTagStyleMap = React.useMemo(
+    () => buildTagStyleMapFromPapers(similarPapers),
+    [similarPapers]
+  );
+
+  const recTagStyleMap = React.useMemo(
+    () => buildTagStyleMapFromPapers(recommendedPapers),
+    [recommendedPapers]
+  );
 
   const hasRecordedHistory = React.useRef(false);
 
@@ -92,7 +421,9 @@ const PaperDetailPage: React.FC = () => {
   }
 
   const title = paper.title || paper.name || 'Untitled Paper';
-  const abstract = paper.abstract || paper.summary || paper.description || 'No abstract available.';
+  const abstract = paper.abstract || paper.summary || '';
+  const description =
+    typeof paper.description === 'string' ? paper.description.trim() : '';
   const status = paper.status || 'Published';
   
   // Metadata fields
@@ -125,19 +456,6 @@ const PaperDetailPage: React.FC = () => {
     return { category: catCode, topic: null, code: catCode };
   });
 
-  const getReadableCategory = (catCode: string) => {
-    if (!catCode) return '';
-    for (const cat of categoriesList) {
-      if (cat.code === catCode) return cat.title;
-      if (cat.topics) {
-        const foundTopic = cat.topics.find((t: any) => t.code === catCode);
-        if (foundTopic) return foundTopic.title;
-      }
-    }
-    const parts = catCode.split('.');
-    return parts.length > 1 ? parts[1] : catCode;
-  };
-
   // Custom logic to colorize badges based on typical status strings
   const getStatusColor = (s: string) => {
     const lower = s.toLowerCase();
@@ -147,8 +465,6 @@ const PaperDetailPage: React.FC = () => {
     if (lower.includes('draft') || lower.includes('new')) return 'bg-blue-500/10 text-blue-500 border-blue-500/40';
     return 'bg-primary/10 text-primary border-primary/40';
   };
-
-  const recommendedPapers = Array.isArray(recommendedData) ? recommendedData : (recommendedData?.data || []);
 
   return (
     <div className="min-h-screen bg-background text-foreground py-12 px-4 sm:px-6 lg:px-8">
@@ -184,13 +500,24 @@ const PaperDetailPage: React.FC = () => {
             </div>
           )}
 
-          {/* Abstract */}
-          <div className="mb-10">
-            <h3 className="text-xs font-bold text-muted-foreground mb-3 uppercase tracking-widest">Abstract</h3>
-            <div className="prose prose-sm sm:prose-base dark:prose-invert max-w-none text-foreground/90 leading-relaxed font-serif">
-              <p className="whitespace-pre-wrap">{abstract}</p>
+          {description && (
+            <div className="mb-8">
+              <h3 className="text-xs font-bold text-muted-foreground mb-3 uppercase tracking-widest">Description</h3>
+              <p className="text-foreground/90 text-base leading-relaxed">
+                {description}
+              </p>
             </div>
-          </div>
+          )}
+
+          {/* Abstract */}
+          {abstract && (
+            <div className="mb-10">
+              <h3 className="text-xs font-bold text-muted-foreground mb-3 uppercase tracking-widest">Abstract</h3>
+              <div className="prose prose-sm sm:prose-base dark:prose-invert max-w-none text-foreground/90 leading-relaxed font-serif">
+                <p className="whitespace-pre-wrap">{abstract}</p>
+              </div>
+            </div>
+          )}
 
           {/* Categories & Topics */}
           {categoryNames.length > 0 && (
@@ -288,70 +615,32 @@ const PaperDetailPage: React.FC = () => {
         
         {/* Sidebar Column */}
         <div className="lg:col-span-1 sticky top-6 h-fit max-h-[calc(100vh-3rem)] overflow-y-auto pr-2 custom-scrollbar">
-          <div className="bg-muted/20 border border-border/50 rounded-3xl p-6 shadow-sm">
-            <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-6">You Might Also Like</h2>
-            
-            {isRecommendedLoading ? (
-              <div className="flex justify-center py-10">
-                <Spinner size={32} className="text-primary" />
-              </div>
-            ) : recommendedPapers.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No recommendations available.</p>
-            ) : (
-              <div className="flex flex-col gap-4">
-                {recommendedPapers.map((rec: any, idx: number) => {
-                  // extract fields
-                  const recPaper = rec.paper || rec;
-                  const routeId = getPaperRouteId(recPaper as Record<string, unknown>);
-                  const recTitle = rec.title || rec.paper?.title || "Untitled";
-                  const recAuthors = rec.authors || rec.paper?.authors;
-                  const recCats = rec.categories || rec.paper?.categories || rec.topics || [];
-                  const recDate = rec.published_at || rec.created_at || rec.date || rec.paper?.published_at;
-                  
-                  return (
-                    <div 
-                      key={idx}
-                      onClick={() => {
-                        if (routeId) navigate(`/paper/${routeId}`);
-                      }}
-                      className="group flex flex-col bg-card border border-border hover:border-primary/50 rounded-2xl cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 overflow-hidden"
-                    >
-                      <div className="h-28 w-full bg-muted/50 overflow-hidden relative border-b border-border/50">
-                        <img 
-                          src={`https://picsum.photos/seed/${routeId || idx}/400/200`} 
-                          alt="Cover Placeholder" 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100" 
-                        />
-                        {recCats && recCats.length > 0 && (
-                          <span className="absolute bottom-2 right-2 bg-background/90 backdrop-blur-md text-[10px] text-foreground font-bold px-2.5 py-0.5 rounded-full border border-border shadow-sm truncate max-w-[90%]">
-                            {getReadableCategory(recCats[0])}
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className="p-4 flex flex-col gap-1.5">
-                        <h3 className="font-bold text-foreground text-xs line-clamp-2 group-hover:text-primary transition-colors leading-snug">
-                          {recTitle}
-                        </h3>
-                        {recAuthors && (
-                          <p className="text-[11px] text-muted-foreground line-clamp-1">
-                            {Array.isArray(recAuthors) ? recAuthors.join(', ') : recAuthors}
-                          </p>
-                        )}
-                        {recDate && (
-                          <p className="text-[10px] text-muted-foreground mt-0.5 font-bold uppercase tracking-widest opacity-70">
-                            {new Date(recDate).toLocaleDateString()}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          <RecommendationCards
+            title="You Might Also Like"
+            papers={recommendedPapers}
+            isLoading={isRecommendedLoading}
+            emptyText="No recommendations available."
+            categoriesList={categoriesList}
+            tagStyleMap={recTagStyleMap}
+            onNavigate={(routeId) => navigate(`/paper/${routeId}`)}
+          />
         </div>
         </div>
+
+        <RelatedPapersCarousel
+          papers={similarPapers}
+          isLoading={isSimilarLoading}
+          emptyText={
+            isSimilarError
+              ? 'Failed to load related papers.'
+              : Number.isFinite(similarCount) && similarCount === 0
+                ? 'No similar papers indexed for this paper yet.'
+                : 'No related papers found.'
+          }
+          categoriesList={categoriesList}
+          tagStyleMap={similarTagStyleMap}
+          onNavigate={(routeId) => navigate(`/paper/${routeId}`)}
+        />
       </div>
     </div>
   );

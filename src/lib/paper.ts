@@ -27,6 +27,21 @@ export function isValidPaperId(id?: string | null) {
   return !!id && id !== "undefined" && id !== "null"
 }
 
+export function parsePaperListResponse(data: unknown): Record<string, unknown>[] {
+  if (!data) return []
+  if (Array.isArray(data)) return data as Record<string, unknown>[]
+
+  if (typeof data === "object") {
+    const obj = data as Record<string, unknown>
+    for (const key of ["data", "papers", "results", "items", "similar"]) {
+      const value = obj[key]
+      if (Array.isArray(value)) return value as Record<string, unknown>[]
+    }
+  }
+
+  return []
+}
+
 export function extractPaperTopicCodes(paper: Record<string, unknown>): string[] {
   const raw =
     paper.categories ??
