@@ -4,6 +4,8 @@ import { getCategories, updateUserTopics } from '@/lib/api';
 import { useCategoryStore, type Category } from '@/store/useCategoryStore';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { formatDocumentTitle } from '@/lib/document-title';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { CheckCircle2, Circle, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,7 +15,7 @@ export default function TourPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = "Welcome Tour | arXvi";
+    document.title = formatDocumentTitle("Welcome Tour");
   }, []);
 
   const { data: categories, isLoading, error } = useQuery<Category[]>({
@@ -45,7 +47,7 @@ export default function TourPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-screen items-center justify-center bg-gradient-auth">
         <Spinner size={40} className="text-primary" />
       </div>
     );
@@ -65,7 +67,8 @@ export default function TourPage() {
   );
 
   return (
-    <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
+    <div className="relative min-h-screen bg-gradient-main text-foreground py-12 px-4 sm:px-6 lg:px-8">
+      <ThemeToggle className="absolute right-4 top-4 z-20 sm:right-6 sm:top-6" />
       <div className="max-w-4xl mx-auto">
 
         {/* ── Step 1: Choose Categories ── */}

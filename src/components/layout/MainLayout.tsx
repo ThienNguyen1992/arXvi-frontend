@@ -7,6 +7,8 @@ import { Spinner } from '@/components/ui/spinner';
 import { useCategoryStore } from '@/store/useCategoryStore';
 import { cn } from '@/lib/utils';
 import NotificationButton from '@/components/NotificationButton';
+import { AppBrand } from '@/components/AppBrand';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const MainLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -73,10 +75,13 @@ const MainLayout: React.FC = () => {
     }
   };
 
+  const navItemClass = (active: boolean) =>
+    cn('nav-item', active && 'nav-item-active');
+
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
+    <div className="flex flex-col h-screen overflow-hidden bg-gradient-app text-foreground">
       {/* TOP HEADER */}
-      <header className="relative z-50 flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 shadow-sm sm:px-6">
+      <header className="relative z-50 flex h-16 shrink-0 items-center justify-between border-b border-border/40 bg-gradient-header px-4 shadow-sm backdrop-blur-md sm:px-6">
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             type="button"
@@ -87,16 +92,13 @@ const MainLayout: React.FC = () => {
           >
             <Menu size={22} />
           </button>
-          <div className="flex cursor-pointer items-center gap-2" onClick={() => handleNav('/home')}>
-            <div className="flex items-center gap-1 text-xl font-bold tracking-tight sm:text-2xl">
-              <span className="text-foreground">daily</span>
-              <span className="text-primary">.</span>
-              <span className="text-foreground">dev</span>
-            </div>
+          <div className="cursor-pointer" onClick={() => handleNav('/home')}>
+            <AppBrand size="sm" />
           </div>
         </div>
         
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
+          <ThemeToggle />
           <NotificationButton />
 
           <div className="relative" ref={settingsRef}>
@@ -104,7 +106,7 @@ const MainLayout: React.FC = () => {
             onClick={() => setShowSettings(!showSettings)} 
             className="flex items-center gap-2 hover:bg-accent p-1.5 pr-3 rounded-full transition-colors border border-transparent hover:border-border cursor-pointer"
           >
-            <div className="h-9 w-9 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold uppercase text-sm">
+            <div className="h-9 w-9 rounded-full bg-gradient-brand text-primary-foreground flex items-center justify-center font-bold uppercase text-sm shadow-glow">
               U
             </div>
             <ChevronDown size={16} className="text-muted-foreground" />
@@ -153,7 +155,7 @@ const MainLayout: React.FC = () => {
         {/* Sidebar */}
         <aside
           className={cn(
-            'flex w-64 shrink-0 flex-col border-r border-border bg-card px-4 py-6 shadow-sm transition-all duration-300 ease-in-out',
+            'flex w-64 shrink-0 flex-col border-r border-border/40 bg-gradient-sidebar px-4 py-6 shadow-sm backdrop-blur-md transition-all duration-300 ease-in-out',
             'fixed bottom-0 left-0 top-16 z-40 lg:static lg:top-auto lg:z-10',
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full',
             !isSidebarOpen && 'lg:w-0 lg:overflow-hidden lg:border-0 lg:px-0 lg:translate-x-0'
@@ -162,14 +164,12 @@ const MainLayout: React.FC = () => {
           <div className="flex flex-col h-full overflow-hidden">
             {/* Menu Section */}
             <div className="mb-8">
-              <h2 className="text-xs font-bold mb-3 text-muted-foreground uppercase tracking-widest px-2">Menu</h2>
+              <h2 className="section-label mb-3 px-2">Menu</h2>
               <ul className="space-y-1">
                 <li>
                   <button 
                     onClick={() => handleNav('/home')}
-                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg font-medium text-sm transition-colors cursor-pointer ${
-                      activeTabState === 'feed' ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent'
-                    }`}
+                    className={navItemClass(activeTabState === 'feed')}
                   >
                     <Rss size={18} />
                     My Feed
@@ -178,9 +178,7 @@ const MainLayout: React.FC = () => {
                 <li>
                   <button 
                     onClick={() => handleNav('/favorites')}
-                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg font-medium text-sm transition-colors cursor-pointer ${
-                      activeTabState === 'favorites' ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent'
-                    }`}
+                    className={navItemClass(activeTabState === 'favorites')}
                   >
                     <Heart size={18} />
                     Favorites
@@ -189,9 +187,7 @@ const MainLayout: React.FC = () => {
                 <li>
                   <button 
                     onClick={() => handleNav('/history')}
-                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg font-medium text-sm transition-colors cursor-pointer ${
-                      activeTabState === 'history' ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent'
-                    }`}
+                    className={navItemClass(activeTabState === 'history')}
                   >
                     <Clock size={18} />
                     History
@@ -200,9 +196,7 @@ const MainLayout: React.FC = () => {
                 <li>
                   <button 
                     onClick={() => handleNav('/leaderboard')}
-                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg font-medium text-sm transition-colors cursor-pointer ${
-                      activeTabState === 'leaderboard' ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent'
-                    }`}
+                    className={navItemClass(activeTabState === 'leaderboard')}
                   >
                     <BarChart2 size={18} />
                     Leaderboard
@@ -211,7 +205,7 @@ const MainLayout: React.FC = () => {
                 <li>
                   <button 
                     onClick={() => handleNav('/manage-topics')}
-                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg font-medium text-sm transition-colors text-foreground hover:bg-accent cursor-pointer"
+                    className={navItemClass(location.pathname === '/manage-topics')}
                   >
                     <Tag size={18} />
                     Manage Topics
@@ -220,7 +214,7 @@ const MainLayout: React.FC = () => {
               </ul>
             </div>
 
-            <h2 className="text-xs font-bold mb-3 text-muted-foreground uppercase tracking-widest px-2">Your Topics</h2>
+            <h2 className="section-label mb-3 px-2">Your Topics</h2>
             <nav className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
               {isLoadingTopics ? (
                 <div className="flex justify-center py-4">
@@ -235,7 +229,7 @@ const MainLayout: React.FC = () => {
                     const key = typeof topic === 'string' ? topic : (topic.id || topic.code || idx);
                     return (
                       <li key={key}>
-                        <div className="text-foreground hover:text-primary-foreground hover:bg-primary transition-colors block px-3 py-2 rounded-lg font-medium text-sm cursor-pointer truncate">
+                        <div className="nav-item truncate hover:bg-gradient-brand hover:text-primary-foreground hover:shadow-glow">
                           {label}
                         </div>
                       </li>
@@ -248,7 +242,7 @@ const MainLayout: React.FC = () => {
         </aside>
 
         {/* MAIN CONTENT AREA */}
-        <main className="flex-1 p-8 overflow-y-auto bg-background custom-scrollbar">
+        <main className="flex-1 overflow-y-auto bg-gradient-main custom-scrollbar p-4 sm:p-6">
           <Outlet />
         </main>
       </div>

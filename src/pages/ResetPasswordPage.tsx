@@ -4,22 +4,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { resetPassword } from "@/lib/api"
-
-function DailyLogo() {
-  return (
-    <div className="flex items-center gap-1 text-2xl font-bold tracking-tight">
-      <span className="text-foreground">daily</span>
-      <span className="text-primary">.</span>
-      <span className="text-foreground">dev</span>
-    </div>
-  )
-}
+import { AppBrand } from "@/components/AppBrand"
+import { ThemeToggle } from "@/components/ThemeToggle"
+import { formatDocumentTitle } from "@/lib/document-title"
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = "Reset Password | arXvi";
+    document.title = formatDocumentTitle("Reset Password");
   }, []);
 
   const [password, setPassword] = useState("")
@@ -75,16 +68,13 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="relative flex min-h-svh flex-col items-center justify-center overflow-hidden px-4 py-12">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,color-mix(in_srgb,var(--primary)_25%,transparent),transparent)]"
-      />
+    <div className="relative flex min-h-svh flex-col items-center justify-center overflow-hidden bg-gradient-auth px-4 py-12">
+      <ThemeToggle className="absolute right-4 top-4 z-20 sm:right-6 sm:top-6" />
 
       <div className="relative z-10 flex w-full max-w-[26rem] flex-col items-center gap-8">
-        <DailyLogo />
+        <AppBrand size="lg" />
 
-        <div className="w-full rounded-2xl border border-pepper-40 bg-pepper-70/80 p-8 shadow-[0_8px_32px_color-mix(in_srgb,var(--color-pepper-90)_60%,transparent)] backdrop-blur-sm">
+        <div className="w-full rounded-2xl border border-border bg-card p-8 shadow-card glass-card">
           <div className="mb-8 text-center">
             <h1 className="text-xl font-bold text-foreground">Reset Password</h1>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -94,7 +84,7 @@ export default function ResetPasswordPage() {
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="password" className="text-muted-foreground">
+              <Label htmlFor="password">
                 New Password
               </Label>
               <Input
@@ -111,13 +101,13 @@ export default function ResetPasswordPage() {
                   }
                 }}
                 required
-                className="h-11 rounded-xl border-pepper-40 bg-pepper-80/50 px-4 text-foreground placeholder:text-pepper-10/60 focus-visible:border-cabbage-50 focus-visible:ring-cabbage-50/30"
+                className="h-11 rounded-xl px-4"
               />
-              {passwordError && <p className="text-red-500 text-sm mt-1">{passwordError}</p>}
+              {passwordError && <p className="text-destructive text-sm mt-1">{passwordError}</p>}
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="confirmPassword" className="text-muted-foreground">
+              <Label htmlFor="confirmPassword">
                 Confirm Password
               </Label>
               <Input
@@ -131,13 +121,13 @@ export default function ResetPasswordPage() {
                   setConfirmPasswordError(validateConfirmPassword(e.target.value, password));
                 }}
                 required
-                className="h-11 rounded-xl border-pepper-40 bg-pepper-80/50 px-4 text-foreground placeholder:text-pepper-10/60 focus-visible:border-cabbage-50 focus-visible:ring-cabbage-50/30"
+                className="h-11 rounded-xl px-4"
               />
-              {confirmPasswordError && <p className="text-red-500 text-sm mt-1">{confirmPasswordError}</p>}
+              {confirmPasswordError && <p className="text-destructive text-sm mt-1">{confirmPasswordError}</p>}
             </div>
 
             {error && (
-              <p className="rounded-lg bg-ketchup-60/15 px-3 py-2 text-sm text-ketchup-30">
+              <p className="alert-error">
                 {error}
               </p>
             )}
@@ -146,7 +136,7 @@ export default function ResetPasswordPage() {
               type="submit"
               disabled={!password || !confirmPassword || passwordError !== null || confirmPasswordError !== null}
               loading={loading}
-              className="mt-1 h-11 w-full rounded-xl bg-primary text-base font-bold hover:bg-cabbage-50 disabled:opacity-60"
+              className="mt-1 h-11 !w-full rounded-xl text-base font-bold"
             >
               Reset Password
             </Button>
@@ -156,7 +146,7 @@ export default function ResetPasswordPage() {
             Remembered your password?{" "}
             <Link
               to="/login"
-              className="font-medium text-water-30 transition-colors hover:text-water-20"
+              className="font-medium text-primary transition-colors hover:text-primary/80"
             >
               Back to login
             </Link>

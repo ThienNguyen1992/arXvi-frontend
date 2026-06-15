@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCategories, getUserTopics, updateUserTopics } from '@/lib/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
+import { formatDocumentTitle } from '@/lib/document-title';
 import { ArrowLeft, Save, Tag } from 'lucide-react';
 
 const ManageTopicsPage: React.FC = () => {
@@ -13,7 +15,7 @@ const ManageTopicsPage: React.FC = () => {
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
   
   React.useEffect(() => {
-    document.title = "Manage Topics | arXvi";
+    document.title = formatDocumentTitle("Manage Topics");
   }, []);
   
   // 1. Fetch user's current topics to pre-select
@@ -129,19 +131,16 @@ const ManageTopicsPage: React.FC = () => {
           </div>
         </div>
 
-        <button
+        <Button
           type="button"
           onClick={handleSave}
-          disabled={saveMutation.isPending || selectedCodes.size < 3}
-          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-md transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 sm:py-2.5 sm:text-base"
+          disabled={selectedCodes.size < 3}
+          loading={saveMutation.isPending}
+          className="gap-2 sm:px-5 sm:py-2.5 sm:text-base"
         >
-          {saveMutation.isPending ? (
-            <Spinner size={18} className="text-primary-foreground" />
-          ) : (
-            <Save size={18} />
-          )}
+          {!saveMutation.isPending && <Save size={18} />}
           Save Changes
-        </button>
+        </Button>
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-6 md:px-8 md:py-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
