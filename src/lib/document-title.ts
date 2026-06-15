@@ -1,4 +1,4 @@
-const APP_NAME = "arXvi"
+export const APP_NAME = "ArxWiser"
 
 export const ROUTE_TITLES: Record<string, string> = {
   "/home": "Home",

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import ReactECharts from 'echarts-for-react';
+import * as echarts from 'echarts';
 import 'echarts-wordcloud';
 import { 
   getTopicVelocity, 
@@ -11,12 +12,27 @@ import {
   getTopAuthors, 
   getRisingTopics 
 } from '@/lib/api';
+import { buildWordCloudChartOption, CHART_COLORS, normalizeTopicRaceData, normalizeWordCloudData } from '@/lib/chart-data';
 import { Spinner } from '@/components/ui/spinner';
+import { useThemeStore } from '@/store/useThemeStore';
 import { Trophy, TrendingUp, BarChart2, Crown, Zap, Flame, TrendingDown, Hash, Rocket, Sparkles } from 'lucide-react';
+
+function formatAuthorLabel(raw: string) {
+  const primary = raw.split(',')[0]?.trim() || raw.trim() || 'Unknown';
+  return primary;
+}
+
+function formatAuthorHandle(raw: string) {
+  const primary = formatAuthorLabel(raw);
+  const handle = primary.replace(/[^\w]/g, '').toLowerCase();
+  return handle ? `@${handle}` : '@unknown';
+}
 
 const LeaderboardPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'dashboard'>('leaderboard');
   const [timeframe, setTimeframe] = useState<'today' | 'week' | 'month' | 'all'>('month');
+  const theme = useThemeStore((state) => state.theme);
+  const isDark = theme === 'dark';
 
   const { data: velocityData, isLoading: isLoadingVelocity } = useQuery({
     queryKey: ['topicVelocity'],
@@ -61,8 +77,21 @@ const LeaderboardPage: React.FC = () => {
     enabled: activeTab === 'leaderboard'
   });
 
+  const keywordsCloudItems = useMemo(
+    () => normalizeWordCloudData(wordCloudData),
+    [wordCloudData]
+  );
+  const topicRaceChart = useMemo(
+    () => normalizeTopicRaceData(raceData),
+    [raceData]
+  );
+  const wordCloudOption = useMemo(
+    () => buildWordCloudChartOption(keywordsCloudItems, isDark),
+    [keywordsCloudItems, isDark]
+  );
+
   return (
-    <div className="animate-in fade-in duration-500 max-w-7xl mx-auto h-full flex flex-col">
+    <div className="animate-in fade-in duration-500 w-full h-full flex flex-col">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight mb-2 text-foreground">Statistics Center</h1>
@@ -128,9 +157,11 @@ const LeaderboardPage: React.FC = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Top Authors */}
-            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm overflow-hidden">
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-primary/20 text-primary rounded-xl"><Trophy size={20} /></div>
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary">
+                  <Trophy size={20} />
+                </div>
                 <h2 className="text-xl font-bold">Top Authors</h2>
               </div>
               {isLoadingAuthors ? <Spinner /> : (
@@ -139,41 +170,47 @@ const LeaderboardPage: React.FC = () => {
                     const isTop1 = idx === 0;
                     const isTop2 = idx === 1;
                     const isTop3 = idx === 2;
-                    const name = author.author || author.name || 'Unknown';
-                    const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`;
+                    const rawName = author.author || author.name || 'Unknown';
+                    const displayName = formatAuthorLabel(rawName);
+                    const displayHandle = formatAuthorHandle(rawName);
+                    const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(displayName)}`;
                     
                     return (
-                    <div key={idx} className={`flex items-center justify-between p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] cursor-pointer group ${
+                    <div key={idx} className={`flex min-w-0 items-center gap-3 p-3 rounded-xl transition-all duration-300 hover:scale-[1.01] cursor-pointer group ${
                       isTop1 ? 'bg-yellow-500/10 border border-yellow-500/30 hover:border-yellow-500 hover:shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 
                       isTop2 ? 'bg-gray-400/10 border border-gray-400/20 hover:border-gray-400 hover:shadow-[0_0_15px_rgba(156,163,175,0.2)]' :
                       isTop3 ? 'bg-amber-600/10 border border-amber-600/20 hover:border-amber-600 hover:shadow-[0_0_15px_rgba(217,119,6,0.2)]' :
                       'hover:bg-muted/50 border border-transparent'
                     }`}>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-6 font-bold text-sm">
-                          {isTop1 ? <Crown size={20} className="text-yellow-500 drop-shadow-sm" /> :
-                           isTop2 ? <Crown size={18} className="text-gray-400" /> :
-                           isTop3 ? <Crown size={18} className="text-amber-600" /> :
-                           <span className="text-muted-foreground">{idx + 1}</span>}
-                        </div>
-                        <div className="relative">
-                          <img src={avatarUrl} alt="avatar" className={`w-10 h-10 rounded-full bg-card p-1 ${
-                            isTop1 ? 'ring-2 ring-yellow-500' :
-                            isTop2 ? 'ring-2 ring-gray-400' :
-                            isTop3 ? 'ring-2 ring-amber-600' : ''
-                          }`} />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-sm text-foreground">{name}</span>
-                          <span className="text-xs text-muted-foreground">@{name.replace(/\s+/g, '').toLowerCase()}</span>
-                        </div>
+                      <div className="flex shrink-0 items-center justify-center w-6">
+                        {isTop1 ? <Crown size={20} className="text-yellow-500 drop-shadow-sm" /> :
+                         isTop2 ? <Crown size={18} className="text-gray-400" /> :
+                         isTop3 ? <Crown size={18} className="text-amber-600" /> :
+                         <span className="text-sm font-bold text-muted-foreground">{idx + 1}</span>}
                       </div>
-                      <div className="flex flex-col items-end">
+                      <img
+                        src={avatarUrl}
+                        alt=""
+                        className={`size-10 shrink-0 rounded-full object-cover bg-card p-0.5 ${
+                          isTop1 ? 'ring-2 ring-yellow-500' :
+                          isTop2 ? 'ring-2 ring-gray-400' :
+                          isTop3 ? 'ring-2 ring-amber-600' : 'ring-1 ring-border'
+                        }`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-bold text-sm text-foreground" title={rawName}>
+                          {displayName}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground" title={displayHandle}>
+                          {displayHandle}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end pl-1">
                         <div className="flex items-center gap-1 text-sm font-bold text-primary group-hover:text-primary/80 transition-colors">
-                          <Zap size={14} className={isTop1 ? 'text-yellow-500' : 'text-primary'} fill={isTop1 ? '#eab308' : 'currentColor'} />
+                          <Zap size={14} className={`shrink-0 ${isTop1 ? 'text-yellow-500' : 'text-primary'}`} fill={isTop1 ? '#eab308' : 'currentColor'} />
                           {Math.round(author.totalScore) || 0}
                         </div>
-                        <span className="text-[10px] text-muted-foreground">{author.paperCount || 0} papers</span>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">{author.paperCount || 0} papers</span>
                       </div>
                     </div>
                   )})}
@@ -291,11 +328,16 @@ const LeaderboardPage: React.FC = () => {
       ) : (
         <div className="flex flex-col gap-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm h-[400px]">
-              <h2 className="text-xl font-bold mb-4">Topic Velocity</h2>
-              {isLoadingVelocity ? <Spinner /> : (
-                <div className="w-full h-full pb-8">
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col h-[400px]">
+              <h2 className="text-xl font-bold mb-4 shrink-0">Topic Velocity</h2>
+              {isLoadingVelocity ? (
+                <div className="flex flex-1 min-h-0 w-full items-center justify-center">
+                  <Spinner size={32} />
+                </div>
+              ) : (
+                <div className="flex-1 min-h-0 w-full">
                   <ReactECharts 
+                    echarts={echarts}
                     option={{
                       tooltip: { trigger: 'axis' },
                       legend: { top: 'bottom' },
@@ -313,50 +355,41 @@ const LeaderboardPage: React.FC = () => {
               )}
             </div>
             
-            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm h-[400px]">
-              <h2 className="text-xl font-bold mb-4">Trending Keywords Cloud</h2>
-              {isLoadingCloud ? <Spinner /> : (
-                <div className="w-full h-full pb-8">
+            <div className="relative overflow-hidden bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col h-[400px]">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,color-mix(in_srgb,var(--primary)_14%,transparent)_0%,transparent_68%)]"
+              />
+              <div className="relative z-10 flex items-center gap-2 mb-4 shrink-0">
+                <Sparkles size={18} className="text-primary" />
+                <h2 className="text-xl font-bold">Trending Keywords Cloud</h2>
+              </div>
+              {isLoadingCloud ? (
+                <div className="relative z-10 flex flex-1 min-h-0 w-full items-center justify-center">
+                  <Spinner size={32} />
+                </div>
+              ) : (
+                <div className="relative z-10 flex-1 min-h-0 w-full">
                   <ReactECharts 
-                    option={{
-                      tooltip: { show: true },
-                      series: [{
-                        type: 'wordCloud',
-                        shape: 'circle',
-                        sizeRange: [12, 60],
-                        rotationRange: [-90, 90],
-                        gridSize: 8,
-                        textStyle: {
-                          fontFamily: 'sans-serif',
-                          fontWeight: 'bold',
-                          color: function () {
-                            return 'rgb(' + [
-                              Math.round(Math.random() * 160),
-                              Math.round(Math.random() * 160),
-                              Math.round(Math.random() * 160)
-                            ].join(',') + ')';
-                          }
-                        },
-                        data: wordCloudData || [
-                          { name: 'Machine Learning', value: 1000 },
-                          { name: 'Neural Networks', value: 800 },
-                          { name: 'Deep Learning', value: 600 },
-                          { name: 'Computer Vision', value: 400 },
-                          { name: 'Transformers', value: 900 }
-                        ]
-                      }]
-                    }} 
+                    echarts={echarts}
+                    option={wordCloudOption}
+                    notMerge
                     style={{ height: '100%', width: '100%' }} 
                   />
                 </div>
               )}
             </div>
 
-            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm h-[400px]">
-              <h2 className="text-xl font-bold mb-4">Topic Activity Heatmap</h2>
-              {isLoadingHeatmap ? <Spinner /> : (
-                <div className="w-full h-full pb-8">
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col h-[400px]">
+              <h2 className="text-xl font-bold mb-4 shrink-0">Topic Activity Heatmap</h2>
+              {isLoadingHeatmap ? (
+                <div className="flex flex-1 min-h-0 w-full items-center justify-center">
+                  <Spinner size={32} />
+                </div>
+              ) : (
+                <div className="flex-1 min-h-0 w-full">
                   <ReactECharts 
+                    echarts={echarts}
                     option={{
                       tooltip: { position: 'top' },
                       grid: { height: '60%', top: '10%' },
@@ -377,31 +410,44 @@ const LeaderboardPage: React.FC = () => {
               )}
             </div>
 
-            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm h-[400px]">
-              <h2 className="text-xl font-bold mb-4">Topic Race</h2>
-              {isLoadingRace ? <Spinner /> : (
-                <div className="w-full h-full pb-8">
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col h-[400px]">
+              <h2 className="text-xl font-bold mb-4 shrink-0">Topic Race</h2>
+              {isLoadingRace ? (
+                <div className="flex flex-1 min-h-0 w-full items-center justify-center">
+                  <Spinner size={32} />
+                </div>
+              ) : (
+                <div className="flex-1 min-h-0 w-full">
                   <ReactECharts 
+                    echarts={echarts}
                     option={{
-                      xAxis: { max: 'dataMax' },
-                      yAxis: { type: 'category', data: raceData?.labels || ['cs.AI', 'cs.LG', 'cs.CV', 'cs.CL'], inverse: true, animationDuration: 300, animationDurationUpdate: 300 },
+                      grid: { left: '3%', right: '10%', top: '4%', bottom: '4%', containLabel: true },
+                      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                      xAxis: { type: 'value', max: 'dataMax' },
+                      yAxis: {
+                        type: 'category',
+                        data: topicRaceChart.labels,
+                        inverse: true,
+                        animationDuration: 300,
+                        animationDurationUpdate: 300,
+                        axisLabel: { color: isDark ? '#ffffff' : '#000000' },
+                      },
                       series: [{
                         realtimeSort: true,
-                        name: 'Race',
+                        name: 'Papers',
                         type: 'bar',
-                        data: raceData?.values || [120, 200, 150, 80],
-                        label: { show: true, position: 'right', valueAnimation: true },
+                        data: topicRaceChart.values,
+                        label: { show: true, position: 'right', valueAnimation: true, color: isDark ? '#ffffff' : '#000000' },
                         itemStyle: {
-                          color: function(param: any) {
-                            const colors = ['#CAFF33', '#68a6fc', '#e05cf8', '#fa6620'];
-                            return colors[param.dataIndex % colors.length];
-                          }
-                        }
+                          color: (param: { dataIndex: number }) =>
+                            CHART_COLORS[param.dataIndex % CHART_COLORS.length],
+                          borderRadius: [0, 6, 6, 0],
+                        },
                       }],
                       animationDuration: 0,
                       animationDurationUpdate: 3000,
                       animationEasing: 'linear',
-                      animationEasingUpdate: 'linear'
+                      animationEasingUpdate: 'linear',
                     }} 
                     style={{ height: '100%', width: '100%' }} 
                   />

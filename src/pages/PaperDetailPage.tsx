@@ -1,18 +1,14 @@
 import React, { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getPaperById, addHistoryPaper, getCategories, getSimilarPapers, getYouMightLikePapers } from '@/lib/api';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { ArrowLeft, ChevronLeft, ChevronRight, FileText, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  extractArxivId,
-  extractPaperTopicCodes,
-  getPaperRouteId,
-  isValidPaperId,
-  parsePaperListResponse,
-} from '@/lib/paper';
+import { extractArxivId, extractPaperTopicCodes, getPaperRouteId, isValidPaperId, parsePaperListResponse } from '@/lib/paper';
+import { APP_NAME, formatDocumentTitle } from '@/lib/document-title';
 import {
   CATEGORY_TAG_TEXT_COLOR,
   buildTopicTagStyleMap,
@@ -224,17 +220,13 @@ function RecommendationCards({
   );
 }
 
-function RelatedPapersCarousel({
+function DuplicatePapersCarousel({
   papers,
-  isLoading,
-  emptyText,
   categoriesList,
   tagStyleMap,
   onNavigate,
 }: {
   papers: unknown[];
-  isLoading: boolean;
-  emptyText: string;
   categoriesList: CategoriesList;
   tagStyleMap: Map<string, CategoryTagStyle>;
   onNavigate: (routeId: string) => void;
@@ -252,60 +244,48 @@ function RelatedPapersCarousel({
     <section className="mt-10 border-t border-border/50 pt-8">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
-          Related Papers
+          Duplicate papers
         </h2>
-        {papers.length > 0 && (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => scrollBy('left')}
-              className="cursor-pointer rounded-full border border-border bg-card p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              aria-label="Scroll related papers left"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollBy('right')}
-              className="cursor-pointer rounded-full border border-border bg-card p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              aria-label="Scroll related papers right"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => scrollBy('left')}
+            className="cursor-pointer rounded-full border border-border bg-card p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            aria-label="Scroll duplicate papers left"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollBy('right')}
+            className="cursor-pointer rounded-full border border-border bg-card p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            aria-label="Scroll duplicate papers right"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
       </div>
 
-      {isLoading ? (
-        <div className="flex justify-center py-10">
-          <Spinner size={32} className="text-primary" />
-        </div>
-      ) : papers.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-border/60 py-8 text-center text-sm text-muted-foreground">
-          {emptyText}
-        </p>
-      ) : (
-        <div
-          ref={scrollRef}
-          className="scrollbar-hide -mx-1 flex gap-4 overflow-x-auto px-1 pb-2 snap-x snap-mandatory"
-        >
-          {papers.map((rec, idx) => {
-            const recPaper = ((rec as { paper?: unknown }).paper || rec) as Record<string, unknown>;
-            const routeId = getPaperRouteId(recPaper);
-            return (
-              <PaperRecommendationCard
-                key={routeId || idx}
-                rec={rec}
-                idx={idx}
-                categoriesList={categoriesList}
-                tagStyleMap={tagStyleMap}
-                onNavigate={onNavigate}
-                className="w-64 shrink-0 snap-start"
-              />
-            );
-          })}
-        </div>
-      )}
+      <div
+        ref={scrollRef}
+        className="scrollbar-hide -mx-1 flex gap-4 overflow-x-auto px-1 pb-2 snap-x snap-mandatory"
+      >
+        {papers.map((rec, idx) => {
+          const recPaper = ((rec as { paper?: unknown }).paper || rec) as Record<string, unknown>;
+          const routeId = getPaperRouteId(recPaper);
+          return (
+            <PaperRecommendationCard
+              key={routeId || idx}
+              rec={rec}
+              idx={idx}
+              categoriesList={categoriesList}
+              tagStyleMap={tagStyleMap}
+              onNavigate={onNavigate}
+              className="w-64 shrink-0 snap-start"
+            />
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -313,6 +293,7 @@ function RelatedPapersCarousel({
 const PaperDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const validId = isValidPaperId(id);
 
@@ -337,11 +318,7 @@ const PaperDetailPage: React.FC = () => {
 
   const similarArxivId = id || excludeArxivId;
 
-  const {
-    data: similarData,
-    isLoading: isSimilarLoading,
-    isError: isSimilarError,
-  } = useQuery({
+  const { data: similarData, isLoading: isSimilarLoading } = useQuery({
     queryKey: ['similarPapers', similarArxivId],
     queryFn: () => getSimilarPapers(similarArxivId!),
     enabled: isValidPaperId(similarArxivId),
@@ -359,7 +336,6 @@ const PaperDetailPage: React.FC = () => {
 
   const similarPapers = React.useMemo(() => parsePaperListResponse(similarData), [similarData]);
   const recommendedPapers = React.useMemo(() => parsePaperListResponse(recommendedData), [recommendedData]);
-  const similarCount = Number((paper as Record<string, unknown> | undefined)?.similarCount ?? NaN);
 
   const similarTagStyleMap = React.useMemo(
     () => buildTagStyleMapFromPapers(similarPapers),
@@ -371,30 +347,37 @@ const PaperDetailPage: React.FC = () => {
     [recommendedPapers]
   );
 
-  const hasRecordedHistory = React.useRef(false);
-
   useEffect(() => {
     if (paper?.title) {
-      document.title = `${paper.title} | arXvi`;
+      document.title = formatDocumentTitle(paper.title);
     } else {
-      document.title = "Paper Detail | arXvi";
+      document.title = formatDocumentTitle("Paper Detail");
     }
     return () => {
-      document.title = "arXvi"; // Reset title when leaving
+      document.title = APP_NAME;
     };
   }, [paper?.title]);
 
   // Track history when viewing paper
   useEffect(() => {
-    if (id && !hasRecordedHistory.current) {
-      addHistoryPaper(id);
-      hasRecordedHistory.current = true;
-    }
-  }, [id, validId]);
+    if (!validId || !id) return;
+
+    let cancelled = false;
+
+    void addHistoryPaper(id).then((result) => {
+      if (!cancelled && result != null) {
+        void queryClient.invalidateQueries({ queryKey: ['papers', 'history'] });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, validId, queryClient]);
 
   if (!validId) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center bg-background text-center px-4">
+      <div className="flex h-screen flex-col items-center justify-center bg-gradient-auth text-center px-4">
         <p className="text-destructive font-medium mb-4">Invalid paper link.</p>
         <Button onClick={() => navigate('/home')} className="font-semibold px-8 py-2 rounded-xl">
           Back to Home
@@ -405,7 +388,7 @@ const PaperDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-screen items-center justify-center bg-gradient-auth">
         <Spinner size={48} className="text-primary" />
       </div>
     );
@@ -413,7 +396,7 @@ const PaperDetailPage: React.FC = () => {
 
   if (error || !paper) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center bg-background text-center px-4">
+      <div className="flex h-screen flex-col items-center justify-center bg-gradient-auth text-center px-4">
         <p className="text-destructive font-medium mb-4">Failed to load paper details. It might not exist.</p>
         <Button onClick={() => navigate(-1)} className="font-semibold px-8 py-2 rounded-xl">Go Back</Button>
       </div>
@@ -467,7 +450,8 @@ const PaperDetailPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground py-12 px-4 sm:px-6 lg:px-8">
+    <div className="relative min-h-screen bg-gradient-main text-foreground py-12 px-4 sm:px-6 lg:px-8">
+      <ThemeToggle className="fixed right-4 top-4 z-50 sm:right-6 sm:top-6" />
       <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
         <button
           onClick={() => navigate('/home')}
@@ -592,7 +576,7 @@ const PaperDetailPage: React.FC = () => {
                 href={paper.pdf_url}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5"
+                className="btn-linear px-6 py-3 font-bold hover:-translate-y-0.5"
               >
                 <FileText size={20} />
                 View PDF
@@ -627,20 +611,14 @@ const PaperDetailPage: React.FC = () => {
         </div>
         </div>
 
-        <RelatedPapersCarousel
-          papers={similarPapers}
-          isLoading={isSimilarLoading}
-          emptyText={
-            isSimilarError
-              ? 'Failed to load related papers.'
-              : Number.isFinite(similarCount) && similarCount === 0
-                ? 'No similar papers indexed for this paper yet.'
-                : 'No related papers found.'
-          }
-          categoriesList={categoriesList}
-          tagStyleMap={similarTagStyleMap}
-          onNavigate={(routeId) => navigate(`/paper/${routeId}`)}
-        />
+        {!isSimilarLoading && similarPapers.length > 0 && (
+          <DuplicatePapersCarousel
+            papers={similarPapers}
+            categoriesList={categoriesList}
+            tagStyleMap={similarTagStyleMap}
+            onNavigate={(routeId) => navigate(`/paper/${routeId}`)}
+          />
+        )}
       </div>
     </div>
   );

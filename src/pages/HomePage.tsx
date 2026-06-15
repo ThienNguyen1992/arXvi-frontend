@@ -11,7 +11,9 @@ import {
   pickUniqueTagStyle,
   type CategoryTag,
 } from '@/lib/category-tags';
+import { formatDocumentTitle } from '@/lib/document-title';
 import { extractArxivId, extractPaperIds, getPaperRouteId } from '@/lib/paper';
+import { toast } from '@/store/useToastStore';
 
 function buildTopicMaps(categories: Category[]) {
   const topicByCode = new Map<string, string>();
@@ -127,11 +129,11 @@ const HomePage: React.FC = () => {
   else if (location.pathname === '/history') activeTabState = 'history';
 
   const [localFavorites, setLocalFavorites] = useState<Record<string, boolean>>({});
-  
+
   useEffect(() => {
-    if (activeTabState === 'favorites') document.title = "Favorites | arXvi";
-    else if (activeTabState === 'history') document.title = "History | arXvi";
-    else document.title = "Home | arXvi";
+    if (activeTabState === 'favorites') document.title = formatDocumentTitle("Favorites");
+    else if (activeTabState === 'history') document.title = formatDocumentTitle("History");
+    else document.title = formatDocumentTitle("Home");
   }, [activeTabState]);
 
   // Search state
@@ -246,7 +248,8 @@ const HomePage: React.FC = () => {
     },
     initialPageParam: 1,
     enabled: activeTabState === 'history',
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // 5. Load /users/me/favorites on Feed to map arxiv_id → yellow star
@@ -286,6 +289,8 @@ const HomePage: React.FC = () => {
     [favoriteArxivIds]
   );
 
+  const pendingFavoriteKeysRef = useRef(new Set<string>());
+
   const toggleFavoriteMutation = useMutation({
     mutationFn: async ({
       favoriteKey,
@@ -300,28 +305,56 @@ const HomePage: React.FC = () => {
       }
       return addFavoritePaper(favoriteKey);
     },
-    onMutate: async ({ isFavorited, relatedIds }) => {
+    onMutate: async ({ isFavorited, relatedIds, favoriteKey }) => {
+      const targetIds = relatedIds.length > 0 ? relatedIds : [favoriteKey];
+
+      await queryClient.cancelQueries({ queryKey: ['papers', 'favoriteArxivIds'] });
+      await queryClient.cancelQueries({ queryKey: ['papers', 'favorites'] });
+
+      const previousArxivIds = queryClient.getQueryData<string[]>(['papers', 'favoriteArxivIds']);
+
+      if (activeTabState === 'feed') {
+        queryClient.setQueryData<string[]>(['papers', 'favoriteArxivIds'], (old) => {
+          const ids = old ?? [];
+          if (isFavorited) {
+            return ids.filter((id) => !targetIds.includes(id));
+          }
+          return [...new Set([...targetIds, ...ids])];
+        });
+      }
+
       setLocalFavorites((prev) => {
         const next = { ...prev };
         const nextValue = !isFavorited;
-        relatedIds.forEach((id) => {
+        targetIds.forEach((id) => {
           next[id] = nextValue;
         });
         return next;
       });
+
+      return { previousArxivIds };
     },
-    onError: (_error, { isFavorited, relatedIds }) => {
+    onError: (_error, { isFavorited, relatedIds, favoriteKey }, context) => {
+      if (context?.previousArxivIds !== undefined) {
+        queryClient.setQueryData(['papers', 'favoriteArxivIds'], context.previousArxivIds);
+      }
+      const targetIds = relatedIds.length > 0 ? relatedIds : [favoriteKey];
       setLocalFavorites((prev) => {
         const next = { ...prev };
-        relatedIds.forEach((id) => {
+        targetIds.forEach((id) => {
           next[id] = isFavorited;
         });
         return next;
       });
+      toast.error('Failed to update favorites');
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['papers', 'favorites'] });
-      queryClient.invalidateQueries({ queryKey: ['papers', 'favoriteArxivIds'] });
+    onSuccess: (_data, { isFavorited }) => {
+      toast.success(isFavorited ? 'Removed from favorites' : 'Added to favorites');
+    },
+    onSettled: (_data, _error, { favoriteKey }) => {
+      pendingFavoriteKeysRef.current.delete(favoriteKey);
+      queryClient.invalidateQueries({ queryKey: ['papers', 'favoriteArxivIds'], refetchType: 'none' });
+      queryClient.invalidateQueries({ queryKey: ['papers', 'favorites'], refetchType: 'none' });
     },
   });
 
@@ -358,7 +391,7 @@ const HomePage: React.FC = () => {
     <div className="-mx-8 px-4 animate-in fade-in duration-500">
       {/* Search Bar for Feed */}
             {activeTabState === 'feed' && (
-              <div className="mb-8 bg-card border border-border rounded-2xl overflow-hidden shadow-sm focus-within:ring-2 focus-within:ring-primary/50 transition-all">
+              <div className="mb-8 glass-card rounded-2xl overflow-hidden shadow-card focus-within:ring-2 focus-within:ring-primary/50 transition-all">
                 <div className="flex items-center px-5 py-4 border-b border-border/50">
                   <Search size={22} className="text-muted-foreground shrink-0 mr-4" />
                   <input 
@@ -395,7 +428,7 @@ const HomePage: React.FC = () => {
               </div>
             )}
 
-            <h1 className="text-3xl font-extrabold mb-8 text-foreground tracking-tight">
+            <h1 className="text-3xl font-bold mb-8 tracking-tight">
               {activeTabState === 'feed' ? 'Your Daily Feed' : (activeTabState === 'favorites' ? 'Your Favorites' : 'Your History')}
             </h1>
             
@@ -408,7 +441,7 @@ const HomePage: React.FC = () => {
                 Failed to load content. Please try again.
               </div>
             ) : allPapers.length === 0 ? (
-              <div className="text-center py-20 text-muted-foreground bg-card border border-border rounded-xl">
+              <div className="text-center py-20 text-muted-foreground surface-card rounded-xl">
                 <p className="text-lg mb-2">No papers found.</p>
                 {activeTabState === 'favorites' && <p className="text-sm">You haven't added any favorites yet.</p>}
                 {activeTabState === 'history' && <p className="text-sm">Your reading history is empty.</p>}
@@ -439,8 +472,11 @@ const HomePage: React.FC = () => {
                     return (
                       <div 
                         key={`${activeTabState}-${routeId || arxivId}-${index}`} 
-                        onClick={() => routeId && navigate(`/paper/${routeId}`)}
-                        className="bg-card border border-border rounded-xl shadow-sm transition-all hover:shadow-md hover:border-primary/50 flex flex-col overflow-hidden group cursor-pointer"
+                        onClick={() => {
+                          if (!routeId) return;
+                          navigate(`/paper/${routeId}`);
+                        }}
+                        className="surface-card rounded-xl transition-all hover:shadow-glow hover:border-primary/40 flex flex-col overflow-hidden group cursor-pointer"
                       >
                         {/* Image container */}
                         <div className="relative w-full h-28 overflow-hidden bg-muted">
@@ -455,25 +491,21 @@ const HomePage: React.FC = () => {
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              if (!favoriteKey) return;
+                              if (!favoriteKey || pendingFavoriteKeysRef.current.has(favoriteKey)) return;
+                              pendingFavoriteKeysRef.current.add(favoriteKey);
                               toggleFavoriteMutation.mutate({
                                 favoriteKey,
                                 isFavorited,
                                 relatedIds: paperIds.length > 0 ? paperIds : [favoriteKey],
                               });
                             }}
-                            className="absolute top-2 right-2 z-10 cursor-pointer rounded-full border border-border bg-background/80 p-1.5 shadow-sm backdrop-blur-sm transition-colors hover:bg-background disabled:cursor-not-allowed"
-                            disabled={
-                              !favoriteKey ||
-                              (toggleFavoriteMutation.isPending &&
-                                toggleFavoriteMutation.variables?.favoriteKey === favoriteKey)
-                            }
+                            className="absolute top-2 right-2 z-10 cursor-pointer rounded-full border border-border bg-background/80 p-1.5 shadow-sm backdrop-blur-sm transition-colors hover:bg-background"
                           >
                             <Star
                               size={16}
                               className={
                                 isFavorited
-                                  ? "fill-cheese-50 text-cheese-50"
+                                  ? "fill-favorite text-favorite"
                                   : "text-muted-foreground"
                               }
                             />
@@ -482,7 +514,7 @@ const HomePage: React.FC = () => {
 
                         <div className="p-3 flex flex-col flex-1">
                           {/* Title */}
-                          <h3 className="text-sm font-bold text-foreground mb-1.5 line-clamp-2 leading-snug">
+                          <h3 className="text-sm font-semibold mb-1.5 line-clamp-2 leading-snug">
                             {title}
                           </h3>
                           
