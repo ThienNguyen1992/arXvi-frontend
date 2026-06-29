@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" fill="none" role="img" aria-label="Paper cover placeholder">
+  <defs>
+    <linearGradient id="paper-bg" x1="0" y1="0" x2="600" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7B61FF" stop-opacity="0.18"/>
+      <stop offset="45%" stop-color="#0085FF" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#7B61FF" stop-opacity="0.1"/>
+    </linearGradient>
+    <linearGradient id="paper-accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#7B61FF"/>
+      <stop offset="1" stop-color="#0085FF"/>
+    </linearGradient>
+    <pattern id="paper-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0V24" stroke="#7C7C7C" stroke-opacity="0.08" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="600" height="400" fill="url(#paper-bg)"/>
+  <rect width="600" height="400" fill="url(#paper-grid)"/>
+  <g transform="translate(225 95)">
+    <rect x="0" y="0" width="150" height="190" rx="16" fill="#FFFFFF" fill-opacity="0.92" stroke="url(#paper-accent)" stroke-width="2"/>
+    <rect x="24" y="36" width="78" height="8" rx="4" fill="url(#paper-accent)" fill-opacity="0.85"/>
+    <rect x="24" y="58" width="102" height="6" rx="3" fill="#7C7C7C" fill-opacity="0.28"/>
+    <rect x="24" y="74" width="96" height="6" rx="3" fill="#7C7C7C" fill-opacity="0.22"/>
+    <rect x="24" y="90" width="102" height="6" rx="3" fill="#7C7C7C" fill-opacity="0.22"/>
+    <rect x="24" y="106" width="88" height="6" rx="3" fill="#7C7C7C" fill-opacity="0.18"/>
+    <rect x="24" y="130" width="54" height="18" rx="9" fill="url(#paper-accent)" fill-opacity="0.2"/>
+    <path d="M118 8L142 32V190H16V16H118Z" fill="#FFFFFF" fill-opacity="0.35"/>
+    <path d="M118 8L142 32H118V8Z" fill="url(#paper-accent)" fill-opacity="0.35"/>
+  </g>
+</svg>

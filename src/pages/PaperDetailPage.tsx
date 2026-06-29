@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getPaperById, addHistoryPaper, getCategories, getSimilarPapers, getYouMightLikePapers } from '@/lib/api';
 import { Spinner } from '@/components/ui/spinner';
+import { PaperImage } from '@/components/PaperCoverImage';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ArrowLeft, ChevronLeft, ChevronRight, FileText, ExternalLink } from 'lucide-react';
@@ -93,14 +94,12 @@ type CategoriesList = Array<{
 
 function PaperRecommendationCard({
   rec,
-  idx,
   categoriesList,
   tagStyleMap,
   onNavigate,
   className,
 }: {
   rec: unknown;
-  idx: number;
   categoriesList: CategoriesList;
   tagStyleMap: Map<string, CategoryTagStyle>;
   onNavigate: (routeId: string) => void;
@@ -127,10 +126,10 @@ function PaperRecommendationCard({
       )}
     >
       <div className="h-28 w-full bg-muted/50 overflow-hidden relative border-b border-border/50">
-        <img
-          src={`https://picsum.photos/seed/${routeId || idx}/400/200`}
-          alt="Cover Placeholder"
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100"
+        <PaperImage
+          paper={recPaper}
+          alt={recTitle}
+          className="w-full h-full group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100"
         />
       </div>
 
@@ -207,7 +206,6 @@ function RecommendationCards({
               <PaperRecommendationCard
                 key={routeId || idx}
                 rec={rec}
-                idx={idx}
                 categoriesList={categoriesList}
                 tagStyleMap={tagStyleMap}
                 onNavigate={onNavigate}
@@ -277,7 +275,6 @@ function DuplicatePapersCarousel({
             <PaperRecommendationCard
               key={routeId || idx}
               rec={rec}
-              idx={idx}
               categoriesList={categoriesList}
               tagStyleMap={tagStyleMap}
               onNavigate={onNavigate}

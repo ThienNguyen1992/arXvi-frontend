@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCategories, updateUserTopics } from '@/lib/api';
+import { CURRENT_USER_QUERY_KEY } from '@/hooks/useCurrentUser';
 import { useCategoryStore, type Category } from '@/store/useCategoryStore';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { formatDocumentTitle } from '@/lib/document-title';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { CheckCircle2, Circle, ArrowLeft } from 'lucide-react';
+import { CheckCircle2, Circle, ArrowLeft, ArrowRight } from 'lucide-react';
+import { toast } from '@/store/useToastStore';
 import { useNavigate } from 'react-router-dom';
 
 export default function TourPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<1 | 2>(1);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -33,6 +36,12 @@ export default function TourPage() {
   const mutation = useMutation({
     mutationFn: (topicCodes: string[]) => updateUserTopics(topicCodes),
     onSuccess: () => {
+      queryClient.setQueryData(CURRENT_USER_QUERY_KEY, (current) =>
+        current && typeof current === "object"
+          ? { ...current, isFirstLogged: false, is_first_logged: false }
+          : current
+      );
+      queryClient.invalidateQueries({ queryKey: CURRENT_USER_QUERY_KEY });
       navigate('/home');
     },
     onError: (error: any) => {
@@ -42,6 +51,19 @@ export default function TourPage() {
 
   const handleSubmit = () => {
     setSubmitError(null);
+
+    if (selectedTopicCodes.length === 0) {
+      return;
+    }
+
+    if (selectedTopicCodes.length < 3) {
+      const remaining = 3 - selectedTopicCodes.length;
+      toast.error(
+        `Please select at least 3 topics (${remaining} more needed)`
+      );
+      return;
+    }
+
     mutation.mutate(selectedTopicCodes);
   };
 
@@ -118,14 +140,28 @@ export default function TourPage() {
               })}
             </div>
 
-            <div className="mt-10 flex justify-end border-t border-border pt-6 sticky bottom-0 bg-background/80 backdrop-blur-sm pb-6 z-10">
-              <Button
-                onClick={() => setStep(2)}
-                disabled={selectedCategoryIds.length === 0}
-                className="h-10 w-full min-w-[9rem] px-8 text-base font-bold rounded-xl sm:w-auto sm:min-w-[11rem]"
-              >
-                Next
-              </Button>
+            <div className="mt-10 sticky bottom-0 z-10 -mx-4 border-t border-border/80 bg-background/90 px-4 pb-6 pt-5 backdrop-blur-md sm:-mx-6 sm:px-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-center text-sm text-muted-foreground sm:text-left">
+                  {selectedCategoryIds.length > 0 ? (
+                    <>
+                      <span className="font-semibold text-primary">{selectedCategoryIds.length}</span>
+                      {' '}categor{selectedCategoryIds.length === 1 ? 'y' : 'ies'} selected
+                    </>
+                  ) : (
+                    'Pick at least one category to continue'
+                  )}
+                </p>
+                <Button
+                  size="lg"
+                  onClick={() => setStep(2)}
+                  disabled={selectedCategoryIds.length === 0}
+                  className="group h-12 w-full rounded-2xl px-8 text-base font-bold shadow-glow transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 hover:shadow-lg active:translate-y-0 disabled:hover:translate-y-0 disabled:hover:brightness-100 sm:w-auto sm:min-w-[12.5rem]"
+                >
+                  Next
+                  <ArrowRight className="size-5 transition-transform duration-200 group-hover:translate-x-1 group-disabled:translate-x-0" />
+                </Button>
+              </div>
             </div>
           </>
         )}
@@ -235,7 +271,7 @@ export default function TourPage() {
             <div className="mt-10 flex justify-end border-t border-border pt-6 sticky bottom-0 bg-background/80 backdrop-blur-sm pb-6 z-10">
               <Button
                 onClick={handleSubmit}
-                disabled={selectedTopicCodes.length < 3 || mutation.isPending}
+                disabled={selectedTopicCodes.length === 0 || mutation.isPending}
                 loading={mutation.isPending}
                 className="h-10 w-full min-w-[9rem] px-8 text-base font-bold rounded-xl sm:w-auto sm:min-w-[11rem]"
               >
