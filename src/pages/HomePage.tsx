@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCategories, getUserTopics, getPapers, getFavoritePapers, getFavoriteArxivIds, getHistoryPapers, addFavoritePaper, removeFavoritePaper } from '@/lib/api';
 import { Spinner } from '@/components/ui/spinner';
+import { PaperImage } from '@/components/PaperCoverImage';
 import type { Category } from '@/store/useCategoryStore';
 import {
   CATEGORY_TAG_TEXT_COLOR,
@@ -119,6 +120,13 @@ function resolveIsFavorited(
   return false;
 }
 
+const HOME_LIST_QUERY_OPTIONS = {
+  staleTime: 0,
+  gcTime: 0,
+  refetchOnMount: 'always' as const,
+  refetchOnWindowFocus: false,
+};
+
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -136,6 +144,13 @@ const HomePage: React.FC = () => {
     else document.title = formatDocumentTitle("Home");
   }, [activeTabState]);
 
+  useEffect(() => {
+    return () => {
+      queryClient.removeQueries({ queryKey: ['papers'] });
+      queryClient.removeQueries({ queryKey: ['categories'] });
+    };
+  }, [queryClient]);
+
   // Search state
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -149,7 +164,7 @@ const HomePage: React.FC = () => {
   const { data: userTopicsResponse } = useQuery({
     queryKey: ['userTopics'],
     queryFn: getUserTopics,
-    staleTime: 5 * 60 * 1000, // Prevent over-fetching
+    ...HOME_LIST_QUERY_OPTIONS,
   });
 
   const userTopics = Array.isArray(userTopicsResponse) 
@@ -163,7 +178,7 @@ const HomePage: React.FC = () => {
   const { data: categoriesResponse } = useQuery({
     queryKey: ['categories'],
     queryFn: getCategories,
-    staleTime: 5 * 60 * 1000,
+    ...HOME_LIST_QUERY_OPTIONS,
   });
 
   const topicMaps = React.useMemo(() => {
@@ -210,7 +225,7 @@ const HomePage: React.FC = () => {
     },
     initialPageParam: 1,
     enabled: activeTab === 'feed',
-    staleTime: 5 * 60 * 1000,
+    ...HOME_LIST_QUERY_OPTIONS,
   });
 
   // 3. Fetch favorite papers (infinite query for Favorites)
@@ -229,7 +244,7 @@ const HomePage: React.FC = () => {
     },
     initialPageParam: 1,
     enabled: activeTabState === 'favorites',
-    staleTime: 5 * 60 * 1000,
+    ...HOME_LIST_QUERY_OPTIONS,
   });
 
   // 4. Fetch history papers (infinite query for History)
@@ -248,8 +263,7 @@ const HomePage: React.FC = () => {
     },
     initialPageParam: 1,
     enabled: activeTabState === 'history',
-    staleTime: 0,
-    refetchOnMount: 'always',
+    ...HOME_LIST_QUERY_OPTIONS,
   });
 
   // 5. Load /users/me/favorites on Feed to map arxiv_id → yellow star
@@ -257,7 +271,7 @@ const HomePage: React.FC = () => {
     queryKey: ['papers', 'favoriteArxivIds'],
     queryFn: getFavoriteArxivIds,
     enabled: activeTabState === 'feed',
-    staleTime: 5 * 60 * 1000,
+    ...HOME_LIST_QUERY_OPTIONS,
   });
 
   // Setup Intersection Observer for infinite scrolling
@@ -459,7 +473,6 @@ const HomePage: React.FC = () => {
                     const topicTags = resolvePaperTopicTags(paper, topicMaps);
                     const date = formatDate(paper.published_at || paper.created_at || paper.date);
                     const readTime = calculateReadTime(description);
-                    const imageUrl = paper.image_url || `https://picsum.photos/seed/${arxivId || routeId || index}/600/400`;
                     const paperIds = extractPaperIds(paper);
                     const favoriteKey = arxivId || paperIds[0] || "";
                     const isFavorited = resolveIsFavorited(
@@ -480,11 +493,10 @@ const HomePage: React.FC = () => {
                       >
                         {/* Image container */}
                         <div className="relative w-full h-28 overflow-hidden bg-muted">
-                          <img
-                            src={imageUrl}
+                          <PaperImage
+                            paper={paper}
                             alt={title}
-                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                            loading="lazy"
+                            className="h-full w-full transition-transform duration-500 group-hover:scale-105"
                           />
                           <button
                             type="button"
@@ -557,7 +569,7 @@ const HomePage: React.FC = () => {
                                 e.preventDefault();
                                 if (routeId) navigate(`/paper/${routeId}`);
                               }}
-                              className="shrink-0 text-primary hover:text-primary/80 font-semibold text-xs transition-colors"
+                              className="shrink-0 text-xs font-bold text-chart-3 underline-offset-2 transition-colors hover:text-primary hover:underline"
                             >
                               Read more
                             </a>
